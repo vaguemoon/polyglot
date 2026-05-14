@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Polyglot</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&family=Noto+Sans+KR:wght@400;500;700&family=Noto+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/main.css">
+  <style>
+    /* ── Mode selector ──────────────────────────────── */
+    .mode-card {
+      display: flex; align-items: center; gap: 18px;
+      background: var(--surface);
+      border: 1.5px solid transparent;
+      border-radius: var(--radius);
+      padding: 20px 22px;
+      cursor: pointer; text-align: left;
+      font-family: inherit; width: 100%;
+      box-shadow: var(--shadow);
+      transition: border-color 0.15s, box-shadow 0.15s, transform 0.12s;
+    }
+    .mode-card:hover  { border-color: var(--primary); box-shadow: var(--shadow-lg); transform: translateY(-2px); }
+    .mode-card:active { transform: scale(0.98); }
+    .mode-card:disabled { opacity: 0.45; cursor: not-allowed; transform: none !important; box-shadow: none; }
+    .mode-icon { font-size: 2rem; flex-shrink: 0; width: 40px; text-align: center; }
+    .mode-name { font-size: 1rem; font-weight: 700; }
+    .mode-desc { font-size: 0.8rem; color: var(--muted); margin-top: 3px; }
+
+    /* ── Study / progress header ────────────────────── */
+    .study-hdr {
+      padding: 12px 20px 0;
+      max-width: 720px; margin: 0 auto; width: 100%;
+    }
+    .study-hdr-meta {
+      display: flex; justify-content: space-between;
+      font-size: 0.78rem; color: var(--muted); margin-bottom: 7px;
+    }
+
+    /* ── Flashcard ──────────────────────────────────── */
+    .flashcard {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-lg);
+      padding: 48px 32px;
+      text-align: center; cursor: pointer; user-select: none;
+      min-height: 280px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    }
+    .fc-hint    { font-size: 0.82rem; color: var(--muted); }
+    .fc-zh      { font-size: 2rem; font-weight: 700; line-height: 1.2; }
+    .fc-word    { font-size: 2.6rem; font-weight: 800; color: var(--primary); letter-spacing: -0.5px; }
+    .fc-phonetic { font-size: 1rem; color: var(--muted); }
+    .fc-notes   { font-size: 0.84rem; color: var(--muted); font-style: italic; }
+    .tts-round {
+      background: var(--primary-lt); color: var(--primary);
+      border: none; border-radius: 50%; width: 44px; height: 44px;
+      font-size: 1.2rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .tts-round:hover  { background: var(--primary); color: #fff; }
+    .tts-round:active { transform: scale(0.88); }
+    .answer-row { display: flex; gap: 16px; margin-top: 20px; }
+    .answer-row .btn { flex: 1; padding: 16px; font-size: 1rem; border-radius: var(--radius); }
+    .btn-wrong   { background: #fee2e2; color: #dc2626; }
+    .btn-wrong:hover  { background: #fecaca; }
+    .btn-correct { background: #dcfce7; color: #15803d; }
+    .btn-correct:hover { background: #bbf7d0; }
+
+    /* ── MCQ (listening + quiz) ─────────────────────── */
+    .mcq-prompt {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 36px 24px;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .mcq-zh-text { font-size: 2rem; font-weight: 700; line-height: 1.2; }
+    .mcq-hint    { font-size: 0.82rem; color: var(--muted); margin-top: 8px; }
+    .tts-big-btn {
+      background: var(--primary-lt); color: var(--primary);
+      border: none; border-radius: 50%;
+      width: 72px; height: 72px; font-size: 2rem;
+      cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+      transition: background 0.15s, transform 0.12s;
+      box-shadow: var(--shadow);
+    }
+    .tts-big-btn:hover  { background: var(--primary); color: #fff; }
+    .tts-big-btn:active { transform: scale(0.9); }
+    .mcq-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .mcq-choice {
+      background: var(--surface);
+      border: 2px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 10px;
+      font-size: 1.1rem; font-weight: 600; font-family: inherit;
+      cursor: pointer; text-align: center;
+      transition: border-color 0.15s, background 0.15s, transform 0.1s;
+      line-height: 1.3;
+    }
+    .mcq-choice:hover:not(:disabled) { border-color: var(--primary); background: var(--primary-lt); }
+    .mcq-choice:active:not(:disabled) { transform: scale(0.97); }
+    .mcq-choice.correct { border-color: var(--green); background: #dcfce7; color: #15803d; }
+    .mcq-choice.wrong   { border-color: var(--red);   background: #fee2e2; color: #dc2626; }
+    .mcq-choice:disabled { cursor: default; }
+
+    /* ── Spelling ───────────────────────────────────── */
+    .spell-prompt { text-align: center; margin-bottom: 24px; }
+    .spell-zh     { font-size: 2rem; font-weight: 700; }
+    .spell-sub    { font-size: 0.82rem; color: var(--muted); margin-top: 6px; }
+    .spell-answer-bar {
+      min-height: 52px;
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 14px;
+      margin-bottom: 14px;
+      display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+      font-size: 1.4rem; font-weight: 700; color: var(--primary);
+      cursor: pointer; transition: border-color 0.15s;
+    }
+    .spell-answer-bar:has(.spell-tile) { border-color: var(--primary); }
+    .spell-tiles {
+      display: flex; flex-wrap: wrap; gap: 8px;
+      justify-content: center; margin-bottom: 14px;
+    }
+    .spell-tile {
+      background: var(--surface);
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 14px;
+      font-size: 1.3rem; font-weight: 700; cursor: pointer;
+      transition: border-color 0.12s, background 0.12s, transform 0.1s;
+      user-select: none;
+    }
+    .spell-tile:hover  { border-color: var(--primary); background: var(--primary-lt); }
+    .spell-tile:active { transform: scale(0.93); }
+    .spell-tile.selected { opacity: 0.3; cursor: default; pointer-events: none; }
+    .spell-input { font-size: 1.4rem; font-weight: 600; text-align: center; height: 60px; margin-bottom: 14px; }
+    .spell-feedback {
+      padding: 14px; border-radius: var(--radius-sm); text-align: center;
+      font-size: 0.95rem; font-weight: 600; margin-top: 12px;
+    }
+    .spell-feedback.ok  { background: #dcfce7; color: #15803d; }
+    .spell-feedback.bad { background: #fee2e2; color: #dc2626; }
+
+    /* ── Results ────────────────────────────────────── */
+    .results-row {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 14px; margin: 20px 0;
+    }
+    .results-stat { background: var(--surface); border-radius: var(--radius-sm); padding: 20px; text-align: center; }
+    .results-stat .big { font-size: 2.6rem; font-weight: 800; line-height: 1; }
+    .results-stat .lbl { font-size: 0.8rem; color: var(--muted); margin-top: 6px; }
+    .results-stat.ok  .big { color: var(--green); }
+    .results-stat.bad .big { color: var(--red); }
+
+    .loading-msg { color: var(--muted); padding: 28px; text-align: center; font-size: 0.9rem; }
+    .error-msg   { color: var(--red);   padding: 20px; text-align: center; font-size: 0.88rem; }
+  </style>
+</head>
+<body>
+
+  <!-- ── Page: Levels ──────────────────────────────────────────────── -->
+  <div class="page active" id="pg-levels">
+    <div class="topbar">
+      <button class="topbar-back" onclick="location.href='index.html'">←</button>
+      <span class="topbar-title" id="levels-lang-title"></span>
+      <div class="topbar-actions">
+        <button class="btn btn-ghost btn-sm" id="tts-btn" onclick="toggleTTS()">🔊 語音</button>
+      </div>
+    </div>
+    <div class="page-content">
+      <div class="section-header"><span class="section-title">學習級別</span></div>
+      <div class="item-list" id="levels-list"></div>
+      <div class="empty-state" id="levels-empty" style="display:none">
+        <div class="empty-icon">📚</div>
+        <p>還沒有詞彙<br>請先到編輯器新增</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Page: Lessons ─────────────────────────────────────────────── -->
+  <div class="page" id="pg-lessons">
+    <div class="topbar">
+      <button class="topbar-back" onclick="navToLevels()">←</button>
+      <span class="topbar-title" id="lessons-level-title"></span>
+    </div>
+    <div class="page-content">
+      <div class="section-header"><span class="section-title">課程</span></div>
+      <div class="item-list" id="lessons-list"></div>
+      <div class="empty-state" id="lessons-empty" style="display:none">
+        <div class="empty-icon">📝</div>
+        <p>此級別還沒有課程</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Page: Mode Selector ───────────────────────────────────────── -->
+  <div class="page" id="pg-modes">
+    <div class="topbar">
+      <button class="topbar-back" onclick="navToLessons()">←</button>
+      <span class="topbar-title" id="modes-lesson-title"></span>
+      <span class="topbar-badge" id="modes-word-count"></span>
+    </div>
+    <div class="page-content">
+      <div style="text-align:center; padding: 8px 0 20px">
+        <div style="font-size:0.88rem; color:var(--muted)">選擇學習模式</div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:14px">
+        <button class="mode-card" onclick="startMode('flashcard')">
+          <div class="mode-icon">🃏</div>
+          <div><div class="mode-name">單字卡片</div><div class="mode-desc">翻面記憶，評估熟悉程度</div></div>
+        </button>
+        <button class="mode-card" id="mode-btn-listen" onclick="startMode('listening')">
+          <div class="mode-icon">👂</div>
+          <div><div class="mode-name">聽力練習</div><div class="mode-desc">聽發音，選出對應詞彙</div></div>
+        </button>
+        <button class="mode-card" id="mode-btn-quiz" onclick="startMode('quiz')">
+          <div class="mode-icon">📝</div>
+          <div><div class="mode-name">詞彙測驗</div><div class="mode-desc">看中文，選出正確翻譯</div></div>
+        </button>
+        <button class="mode-card" onclick="startMode('spelling')">
+          <div class="mode-icon">✏️</div>
+          <div><div class="mode-name">拼寫練習</div><div class="mode-desc">看中文，輸入或拼出詞彙</div></div>
+        </button>
+      </div>
+      <div id="mcq-min-notice" style="display:none; color:var(--muted); font-size:0.8rem; text-align:center; margin-top:14px; padding:10px; background:var(--bg); border-radius:var(--radius-sm)">
+        ⚠️ 聽力和測驗模式需要至少 4 個詞彙
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Page: Flashcard ───────────────────────────────────────────── -->
+  <div class="page" id="pg-flashcard">
+    <div class="topbar">
+      <button class="topbar-back" onclick="exitMode()">✕</button>
+      <span class="topbar-title" id="fc-lesson-title"></span>
+      <span class="topbar-badge" id="fc-badge"></span>
+    </div>
+    <div class="study-hdr">
+      <div class="study-hdr-meta">
+        <span id="fc-card-label"></span>
+        <span id="fc-score-label"></span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="fc-fill" style="width:0%"></div>
+      </div>
+    </div>
+    <div class="page-content">
+      <div class="flashcard" id="flashcard" onclick="flipCard()">
+        <div class="fc-hint"     id="fc-hint">點擊看答案</div>
+        <div class="fc-zh"       id="fc-zh"></div>
+        <div class="fc-word"     id="fc-word"     style="display:none"></div>
+        <div class="fc-phonetic" id="fc-phonetic" style="display:none"></div>
+        <div class="fc-notes"    id="fc-notes"    style="display:none"></div>
+        <button class="tts-round" id="fc-tts"     style="display:none"
+                onclick="event.stopPropagation(); playTTS()">🔊</button>
+      </div>
+      <div class="answer-row" id="fc-answer-row" style="display:none">
+        <button class="btn btn-wrong"   onclick="fcMark(false)">✗ 不會</button>
+        <button class="btn btn-correct" onclick="fcMark(true)">✓ 會了</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Page: MCQ (Listening + Quiz) ─────────────────────────────── -->
+  <div class="page" id="pg-mcq">
+    <div class="topbar">
+      <button class="topbar-back" onclick="exitMode()">✕</button>
+      <span class="topbar-title" id="mcq-title"></span>
+      <span class="topbar-badge" id="mcq-badge"></span>
+    </div>
+    <div class="study-hdr">
+      <div class="study-hdr-meta">
+        <span id="mcq-card-label"></span>
+        <span id="mcq-score-label"></span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="mcq-fill" style="width:0%"></div>
+      </div>
+    </div>
+    <div class="page-content">
+      <div class="mcq-prompt">
+        <!-- Listening prompt -->
+        <div id="mcq-listen-area" style="display:none">
+          <button class="tts-big-btn" onclick="mcqPlayTTS()" id="mcq-tts-btn">🔊</button>
+          <div class="mcq-hint">點擊播放，選出正確詞彙</div>
+        </div>
+        <!-- Quiz prompt -->
+        <div id="mcq-quiz-area" style="display:none">
+          <div class="mcq-zh-text" id="mcq-zh-text"></div>
+          <div class="mcq-hint">選出正確的翻譯</div>
+        </div>
+      </div>
+      <div class="mcq-choices" id="mcq-choices"></div>
+    </div>
+  </div>
+
+  <!-- ── Page: Spelling ────────────────────────────────────────────── -->
+  <div class="page" id="pg-spell">
+    <div class="topbar">
+      <button class="topbar-back" onclick="exitMode()">✕</button>
+      <span class="topbar-title" id="spell-lesson-title"></span>
+      <span class="topbar-badge" id="spell-badge"></span>
+    </div>
+    <div class="study-hdr">
+      <div class="study-hdr-meta">
+        <span id="spell-card-label"></span>
+        <span id="spell-score-label"></span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="spell-fill" style="width:0%"></div>
+      </div>
+    </div>
+    <div class="page-content">
+      <div class="spell-prompt">
+        <div class="spell-zh"  id="spell-zh"></div>
+        <div class="spell-sub" id="spell-mode-label">請拼出對應的詞彙</div>
+      </div>
+
+      <!-- Select mode -->
+      <div id="spell-select-area">
+        <div class="spell-answer-bar" id="spell-assembled" onclick="spellUndoLast()"></div>
+        <div class="spell-tiles" id="spell-tiles"></div>
+      </div>
+
+      <!-- Input mode -->
+      <div id="spell-input-area" style="display:none">
+        <input class="form-input spell-input" id="spell-input" type="text"
+               placeholder="輸入詞彙…" autocomplete="off">
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:4px">
+        <button class="btn btn-ghost btn-sm" id="spell-toggle-btn" onclick="toggleSpellMode()">輸入模式</button>
+        <button class="btn btn-primary" style="flex:1" onclick="checkSpelling()">確認</button>
+      </div>
+      <div id="spell-feedback" style="display:none" class="spell-feedback"></div>
+    </div>
+  </div>
+
+  <!-- ── Page: Results ─────────────────────────────────────────────── -->
+  <div class="page" id="pg-results">
+    <div class="topbar">
+      <button class="topbar-back" onclick="exitMode()">←</button>
+      <span class="topbar-title">學習結果</span>
+    </div>
+    <div class="page-content">
+      <div style="text-align:center; padding:28px 0 12px">
+        <div style="font-size:3.2rem; margin-bottom:10px" id="res-emoji"></div>
+        <div style="font-size:1.3rem; font-weight:700"   id="res-title"></div>
+        <div style="color:var(--muted); font-size:0.88rem; margin-top:6px" id="res-sub"></div>
+      </div>
+      <div class="results-row">
+        <div class="results-stat ok"><div class="big" id="res-correct">0</div><div class="lbl">答對</div></div>
+        <div class="results-stat bad"><div class="big" id="res-wrong">0</div><div class="lbl">答錯</div></div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:12px; margin-top:8px">
+        <button class="btn btn-primary btn-lg" onclick="restartMode()">再練一次</button>
+        <button class="btn btn-ghost   btn-lg" onclick="navToModes()">換其他模式</button>
+        <button class="btn btn-ghost   btn-lg" onclick="navToLessons()">返回課程</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/tts.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

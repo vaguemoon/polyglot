@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Polyglot — 語言學習</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&family=Noto+Sans+KR:wght@400;500;700&family=Noto+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/main.css">
+  <style>
+    .home-footer {
+      text-align: center;
+      padding: 0 20px 32px;
+      font-size: 0.8rem;
+      color: var(--border);
+    }
+    .lang-card .learn-count {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+  <header class="home-header">
+    <h1>Polyglot</h1>
+    <p>選擇你想學習的語言</p>
+  </header>
+
+  <main class="lang-grid">
+    <a href="app.html?lang=ko" class="lang-card korean">
+      <div class="lang-flag">🇰🇷</div>
+      <div class="lang-native">한국어</div>
+      <div class="lang-zh">韓語</div>
+      <span class="lang-pill">學習韓語詞彙與發音</span>
+    </a>
+    <a href="app.html?lang=vi" class="lang-card vietnamese">
+      <div class="lang-flag">🇻🇳</div>
+      <div class="lang-native">Tiếng Việt</div>
+      <div class="lang-zh">越南語</div>
+      <span class="lang-pill">學習越南語詞彙與聲調</span>
+    </a>
+  </main>
+
+  <footer class="home-footer">
+    <a href="editor.html" style="color: var(--muted); font-size: 0.82rem; text-decoration: none;">✏️ 編輯詞彙</a>
+  </footer>
+
+  <div id="toast"></div>
+</body>
+</html>

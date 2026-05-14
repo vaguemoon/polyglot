@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "defaultMode": "bypassPermissions",
+    "allow": [
+      "Write",
+      "Edit",
+      "Bash(*)",
+      "Bash(mkdir *)",
+      "Bash(node --check *)",
+      "Bash(git log *)",
+      "Bash(git status *)"
+    ]
+  }
+}
