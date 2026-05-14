@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Polyglot — 匯入測試詞彙</title>
+  <link rel="stylesheet" href="css/main.css">
+  <style>
+    .seed-wrap { max-width: 560px; margin: 0 auto; padding: 24px 20px; }
+    .seed-section { background: var(--surface); border-radius: var(--radius); padding: 20px; margin-bottom: 20px; box-shadow: var(--shadow); }
+    .seed-section h2 { margin: 0 0 6px; font-size: 1.1rem; }
+    .seed-section p  { margin: 0 0 16px; font-size: 0.85rem; color: var(--muted); }
+    .log { background: var(--bg); border-radius: var(--radius-sm); padding: 12px; font-size: 0.8rem; font-family: monospace; min-height: 60px; max-height: 200px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+    .log-ok  { color: #15803d; }
+    .log-err { color: #dc2626; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <button class="topbar-back" onclick="location.href='index.html'">←</button>
+    <span class="topbar-title">匯入測試詞彙</span>
+  </div>
+
+  <div class="seed-wrap">
+    <div class="seed-section">
+      <h2>🇰🇷 韓語 — 打招呼 ＋ 數字</h2>
+      <p>2 課 × 5 詞（已有則跳過）</p>
+      <button class="btn btn-ghost btn-sm" onclick="seed('ko')">匯入</button>
+    </div>
+
+    <div class="seed-section">
+      <h2>🇻🇳 越南語 — 打招呼 ＋ 數字</h2>
+      <p>2 課 × 5 詞（已有則跳過）</p>
+      <button class="btn btn-ghost btn-sm" onclick="seed('vi')">匯入</button>
+    </div>
+
+    <div class="seed-section">
+      <h2>🇰🇷 韓語 — 名詞初級</h2>
+      <p>6 課 × 12 詞：動物、食物、顏色、身體、家庭物品、交通工具</p>
+      <button class="btn btn-primary" onclick="seedNouns('ko')">匯入韓語名詞課程</button>
+    </div>
+
+    <div class="seed-section">
+      <h2>🇻🇳 越南語 — 名詞初級</h2>
+      <p>6 課 × 12 詞：動物、食物、顏色、身體、家庭物品、交通工具</p>
+      <button class="btn btn-primary" onclick="seedNouns('vi')">匯入越南語名詞課程</button>
+    </div>
+
+    <div class="seed-section">
+      <h2>紀錄</h2>
+      <div class="log" id="log">等待匯入…</div>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/db.js"></script>
+  <script>
+    const SEED_DATA = {
+      ko: {
+        levelName: '初級',
+        lessons: [
+          {
+            name: '打招呼',
+            words: [
+              { word: '안녕하세요', zh: '你好',     phonetic: 'annyeonghaseyo' },
+              { word: '감사합니다', zh: '謝謝',     phonetic: 'gamsahamnida'  },
+              { word: '죄송합니다', zh: '對不起',   phonetic: 'joesonghamnida'},
+              { word: '네',         zh: '是',       phonetic: 'ne'            },
+              { word: '아니요',     zh: '不是',     phonetic: 'aniyo'         },
+            ]
+          },
+          {
+            name: '數字',
+            words: [
+              { word: '일', zh: '一', phonetic: 'il'  },
+              { word: '이', zh: '二', phonetic: 'i'   },
+              { word: '삼', zh: '三', phonetic: 'sam' },
+              { word: '사', zh: '四', phonetic: 'sa'  },
+              { word: '오', zh: '五', phonetic: 'o'   },
+            ]
+          }
+        ]
+      },
+      vi: {
+        levelName: '初級',
+        lessons: [
+          {
+            name: '打招呼',
+            words: [
+              { word: 'xin chào', zh: '你好',   phonetic: 'sin chào' },
+              { word: 'cảm ơn',   zh: '謝謝',   phonetic: 'gảm ơn'  },
+              { word: 'xin lỗi',  zh: '對不起', phonetic: 'sin lỗi' },
+              { word: 'vâng',     zh: '是',     phonetic: 'vâng'    },
+              { word: 'không',    zh: '不',     phonetic: 'không'   },
+            ]
+          },
+          {
+            name: '數字',
+            words: [
+              { word: 'một',  zh: '一', phonetic: 'một'  },
+              { word: 'hai',  zh: '二', phonetic: 'hai'  },
+              { word: 'ba',   zh: '三', phonetic: 'ba'   },
+              { word: 'bốn',  zh: '四', phonetic: 'bốn'  },
+              { word: 'năm',  zh: '五', phonetic: 'năm'  },
+            ]
+          }
+        ]
+      }
+    };
+
+    const NOUN_DATA = {
+      ko: { lessons: [
+        { name: '動物', words: [
+          { word: '강아지',   zh: '小狗',   phonetic: 'gangaji'      },
+          { word: '고양이',   zh: '貓',     phonetic: 'goyangi'      },
+          { word: '토끼',     zh: '兔子',   phonetic: 'tokki'        },
+          { word: '물고기',   zh: '魚',     phonetic: 'mulgogi'      },
+          { word: '새',       zh: '鳥',     phonetic: 'sae'          },
+          { word: '곰',       zh: '熊',     phonetic: 'gom'          },
+          { word: '코끼리',   zh: '大象',   phonetic: 'kokkiri'      },
+          { word: '사자',     zh: '獅子',   phonetic: 'saja'         },
+          { word: '원숭이',   zh: '猴子',   phonetic: 'wonsungi'     },
+          { word: '나비',     zh: '蝴蝶',   phonetic: 'nabi'         },
+          { word: '개구리',   zh: '青蛙',   phonetic: 'gaeguri'      },
+          { word: '닭',       zh: '雞',     phonetic: 'dak'          },
+        ]},
+        { name: '食物', words: [
+          { word: '밥',       zh: '米飯',   phonetic: 'bap'          },
+          { word: '빵',       zh: '麵包',   phonetic: 'ppang'        },
+          { word: '물',       zh: '水',     phonetic: 'mul'          },
+          { word: '우유',     zh: '牛奶',   phonetic: 'uyu'          },
+          { word: '사과',     zh: '蘋果',   phonetic: 'sagwa'        },
+          { word: '바나나',   zh: '香蕉',   phonetic: 'banana'       },
+          { word: '달걀',     zh: '雞蛋',   phonetic: 'dalgyal'      },
+          { word: '당근',     zh: '紅蘿蔔', phonetic: 'danggeun'     },
+          { word: '딸기',     zh: '草莓',   phonetic: 'ttalgi'       },
+          { word: '포도',     zh: '葡萄',   phonetic: 'podo'         },
+          { word: '수박',     zh: '西瓜',   phonetic: 'subak'        },
+          { word: '오렌지',   zh: '橙子',   phonetic: 'orenji'       },
+        ]},
+        { name: '顏色', words: [
+          { word: '빨간색',   zh: '紅色',   phonetic: 'ppalganssaek' },
+          { word: '파란색',   zh: '藍色',   phonetic: 'paranssaek'   },
+          { word: '노란색',   zh: '黃色',   phonetic: 'noranssaek'   },
+          { word: '초록색',   zh: '綠色',   phonetic: 'chorokssaek'  },
+          { word: '하얀색',   zh: '白色',   phonetic: 'hayanssaek'   },
+          { word: '검은색',   zh: '黑色',   phonetic: 'geomeunsaek'  },
+          { word: '보라색',   zh: '紫色',   phonetic: 'borassaek'    },
+          { word: '분홍색',   zh: '粉紅色', phonetic: 'bunhongssaek' },
+          { word: '주황색',   zh: '橙色',   phonetic: 'juhwangssaek' },
+          { word: '갈색',     zh: '棕色',   phonetic: 'galssaek'     },
+          { word: '회색',     zh: '灰色',   phonetic: 'hoessaek'     },
+          { word: '하늘색',   zh: '天藍色', phonetic: 'haneulessaek' },
+        ]},
+        { name: '身體部位', words: [
+          { word: '머리',     zh: '頭',     phonetic: 'meori'        },
+          { word: '눈',       zh: '眼睛',   phonetic: 'nun'          },
+          { word: '코',       zh: '鼻子',   phonetic: 'ko'           },
+          { word: '입',       zh: '嘴巴',   phonetic: 'ip'           },
+          { word: '귀',       zh: '耳朵',   phonetic: 'gwi'          },
+          { word: '손',       zh: '手',     phonetic: 'son'          },
+          { word: '발',       zh: '腳',     phonetic: 'bal'          },
+          { word: '배',       zh: '肚子',   phonetic: 'bae'          },
+          { word: '다리',     zh: '腿',     phonetic: 'dari'         },
+          { word: '목',       zh: '脖子',   phonetic: 'mok'          },
+          { word: '어깨',     zh: '肩膀',   phonetic: 'eokkkae'      },
+          { word: '치아',     zh: '牙齒',   phonetic: 'chia'         },
+        ]},
+        { name: '家庭物品', words: [
+          { word: '의자',     zh: '椅子',   phonetic: 'uija'         },
+          { word: '책상',     zh: '桌子',   phonetic: 'chaeksang'    },
+          { word: '침대',     zh: '床',     phonetic: 'chimde'       },
+          { word: '소파',     zh: '沙發',   phonetic: 'sopa'         },
+          { word: '텔레비전', zh: '電視',   phonetic: 'tellebijeon'  },
+          { word: '냉장고',   zh: '冰箱',   phonetic: 'naengjanggo'  },
+          { word: '시계',     zh: '時鐘',   phonetic: 'sigye'        },
+          { word: '창문',     zh: '窗戶',   phonetic: 'changmun'     },
+          { word: '문',       zh: '門',     phonetic: 'mun'          },
+          { word: '가방',     zh: '包包',   phonetic: 'gabang'       },
+          { word: '책',       zh: '書',     phonetic: 'chaek'        },
+          { word: '컵',       zh: '杯子',   phonetic: 'keop'         },
+        ]},
+        { name: '交通工具', words: [
+          { word: '자동차',   zh: '汽車',   phonetic: 'jadongcha'    },
+          { word: '버스',     zh: '公車',   phonetic: 'beoseu'       },
+          { word: '지하철',   zh: '地鐵',   phonetic: 'jihacheol'    },
+          { word: '비행기',   zh: '飛機',   phonetic: 'bihaenggi'    },
+          { word: '배',       zh: '船',     phonetic: 'bae'          },
+          { word: '기차',     zh: '火車',   phonetic: 'gicha'        },
+          { word: '자전거',   zh: '腳踏車', phonetic: 'jajeongeo'    },
+          { word: '오토바이', zh: '機車',   phonetic: 'otobai'       },
+          { word: '택시',     zh: '計程車', phonetic: 'taeksi'       },
+          { word: '트럭',     zh: '卡車',   phonetic: 'teureok'      },
+          { word: '헬리콥터', zh: '直升機', phonetic: 'hellkopteo'   },
+          { word: '유모차',   zh: '嬰兒車', phonetic: 'yumocha'      },
+        ]},
+      ]},
+      vi: { lessons: [
+        { name: '動物', words: [
+          { word: 'con chó',        zh: '狗',     phonetic: 'kon chó'        },
+          { word: 'con mèo',        zh: '貓',     phonetic: 'kon mèo'        },
+          { word: 'con thỏ',        zh: '兔子',   phonetic: 'kon thỏ'        },
+          { word: 'con cá',         zh: '魚',     phonetic: 'kon cá'         },
+          { word: 'con chim',       zh: '鳥',     phonetic: 'kon chim'       },
+          { word: 'con gấu',        zh: '熊',     phonetic: 'kon gấu'        },
+          { word: 'con voi',        zh: '大象',   phonetic: 'kon voi'        },
+          { word: 'con sư tử',      zh: '獅子',   phonetic: 'kon sư tử'      },
+          { word: 'con khỉ',        zh: '猴子',   phonetic: 'kon khỉ'        },
+          { word: 'con bướm',       zh: '蝴蝶',   phonetic: 'kon bướm'       },
+          { word: 'con ếch',        zh: '青蛙',   phonetic: 'kon ếch'        },
+          { word: 'con gà',         zh: '雞',     phonetic: 'kon gà'         },
+        ]},
+        { name: '食物', words: [
+          { word: 'cơm',            zh: '米飯',   phonetic: 'cơm'            },
+          { word: 'bánh mì',        zh: '麵包',   phonetic: 'bánh mì'        },
+          { word: 'nước',           zh: '水',     phonetic: 'nướk'           },
+          { word: 'sữa',            zh: '牛奶',   phonetic: 'sữa'            },
+          { word: 'táo',            zh: '蘋果',   phonetic: 'táo'            },
+          { word: 'chuối',          zh: '香蕉',   phonetic: 'chuối'          },
+          { word: 'trứng',          zh: '雞蛋',   phonetic: 'trứng'          },
+          { word: 'cà rốt',         zh: '紅蘿蔔', phonetic: 'cà rốt'         },
+          { word: 'dâu tây',        zh: '草莓',   phonetic: 'dâu tây'        },
+          { word: 'nho',            zh: '葡萄',   phonetic: 'nho'            },
+          { word: 'dưa hấu',        zh: '西瓜',   phonetic: 'dưa hấu'        },
+          { word: 'cam',            zh: '橙子',   phonetic: 'cam'            },
+        ]},
+        { name: '顏色', words: [
+          { word: 'màu đỏ',         zh: '紅色',   phonetic: 'màu đỏ'         },
+          { word: 'màu xanh dương', zh: '藍色',   phonetic: 'màu xanh dương' },
+          { word: 'màu vàng',       zh: '黃色',   phonetic: 'màu vàng'       },
+          { word: 'màu xanh lá',    zh: '綠色',   phonetic: 'màu xanh lá'    },
+          { word: 'màu trắng',      zh: '白色',   phonetic: 'màu trắng'      },
+          { word: 'màu đen',        zh: '黑色',   phonetic: 'màu đen'        },
+          { word: 'màu tím',        zh: '紫色',   phonetic: 'màu tím'        },
+          { word: 'màu hồng',       zh: '粉紅色', phonetic: 'màu hồng'       },
+          { word: 'màu cam',        zh: '橙色',   phonetic: 'màu cam'        },
+          { word: 'màu nâu',        zh: '棕色',   phonetic: 'màu nâu'        },
+          { word: 'màu xám',        zh: '灰色',   phonetic: 'màu xám'        },
+          { word: 'màu xanh lơ',    zh: '天藍色', phonetic: 'màu xanh lơ'    },
+        ]},
+        { name: '身體部位', words: [
+          { word: 'đầu',            zh: '頭',     phonetic: 'đầu'            },
+          { word: 'mắt',            zh: '眼睛',   phonetic: 'mắt'            },
+          { word: 'mũi',            zh: '鼻子',   phonetic: 'mũi'            },
+          { word: 'miệng',          zh: '嘴巴',   phonetic: 'miệng'          },
+          { word: 'tai',            zh: '耳朵',   phonetic: 'tai'            },
+          { word: 'tay',            zh: '手',     phonetic: 'tay'            },
+          { word: 'chân',           zh: '腳',     phonetic: 'chân'           },
+          { word: 'bụng',           zh: '肚子',   phonetic: 'bụng'           },
+          { word: 'lưng',           zh: '背部',   phonetic: 'lưng'           },
+          { word: 'đùi',            zh: '腿',     phonetic: 'đùi'            },
+          { word: 'cổ',             zh: '脖子',   phonetic: 'cổ'             },
+          { word: 'vai',            zh: '肩膀',   phonetic: 'vai'            },
+        ]},
+        { name: '家庭物品', words: [
+          { word: 'ghế',            zh: '椅子',   phonetic: 'ghế'            },
+          { word: 'bàn',            zh: '桌子',   phonetic: 'bàn'            },
+          { word: 'giường',         zh: '床',     phonetic: 'giường'         },
+          { word: 'sofa',           zh: '沙發',   phonetic: 'sofa'           },
+          { word: 'tivi',           zh: '電視',   phonetic: 'ti-vi'          },
+          { word: 'tủ lạnh',        zh: '冰箱',   phonetic: 'tủ lạnh'        },
+          { word: 'đồng hồ',        zh: '時鐘',   phonetic: 'đồng hồ'        },
+          { word: 'cửa sổ',         zh: '窗戶',   phonetic: 'cửa sổ'         },
+          { word: 'cửa',            zh: '門',     phonetic: 'cửa'            },
+          { word: 'túi xách',       zh: '包包',   phonetic: 'túi xách'       },
+          { word: 'sách',           zh: '書',     phonetic: 'sách'           },
+          { word: 'cốc',            zh: '杯子',   phonetic: 'cốc'            },
+        ]},
+        { name: '交通工具', words: [
+          { word: 'ô tô',           zh: '汽車',   phonetic: 'ô tô'           },
+          { word: 'xe buýt',        zh: '公車',   phonetic: 'xe buýt'        },
+          { word: 'tàu điện ngầm',  zh: '地鐵',   phonetic: 'tàu điện ngầm'  },
+          { word: 'máy bay',        zh: '飛機',   phonetic: 'máy bay'        },
+          { word: 'tàu thuyền',     zh: '船',     phonetic: 'tàu thuyền'     },
+          { word: 'tàu hỏa',        zh: '火車',   phonetic: 'tàu hỏa'        },
+          { word: 'xe đạp',         zh: '腳踏車', phonetic: 'xe đạp'         },
+          { word: 'xe máy',         zh: '機車',   phonetic: 'xe máy'         },
+          { word: 'taxi',           zh: '計程車', phonetic: 'taxi'           },
+          { word: 'xe tải',         zh: '卡車',   phonetic: 'xe tải'         },
+          { word: 'trực thăng',     zh: '直升機', phonetic: 'trực thăng'     },
+          { word: 'xe đẩy',         zh: '嬰兒車', phonetic: 'xe đẩy'         },
+        ]},
+      ]},
+    };
+
+    async function seedNouns(lang) {
+      logEl.innerHTML = '';
+      const data    = NOUN_DATA[lang];
+      const label   = lang === 'ko' ? '韓語' : '越南語';
+      log(`開始匯入 ${label} 名詞課程…`);
+      try {
+        const levels = await DB.getLevels(lang);
+        let levelId  = levels.find(l => l.name === '初級')?.id;
+        if (levelId) {
+          log(`✓ 使用現有級別「初級」`, 'log-ok');
+        } else {
+          levelId = await DB.addLevel(lang, '初級');
+          log(`✓ 已建立級別「初級」`, 'log-ok');
+        }
+        let totalWords = 0;
+        for (const lesson of data.lessons) {
+          const lessonId = await DB.addLesson(lang, levelId, lesson.name);
+          log(`  ✓ 課程「${lesson.name}」`, 'log-ok');
+          for (const w of lesson.words) {
+            await DB.addWord(lang, levelId, lessonId, w);
+            totalWords++;
+          }
+        }
+        log(`\n完成！共匯入 ${data.lessons.length} 課 × ${totalWords} 個詞彙`, 'log-ok');
+        log(`→ 前往 app.html?lang=${lang} 開始學習`);
+      } catch (e) {
+        log(`✗ 匯入失敗：${e.message}`, 'log-err');
+      }
+    }
+
+    const logEl = document.getElementById('log');
+    function log(msg, type = '') {
+      const span = document.createElement('span');
+      span.className = type;
+      span.textContent = msg + '\n';
+      logEl.appendChild(span);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    async function seed(lang) {
+      logEl.innerHTML = '';
+      const data = SEED_DATA[lang];
+      log(`開始匯入 ${lang === 'ko' ? '韓語' : '越南語'}…`);
+      try {
+        const levelId = await DB.addLevel(lang, data.levelName);
+        log(`✓ 級別「${data.levelName}」已建立`, 'log-ok');
+
+        for (const lesson of data.lessons) {
+          const lessonId = await DB.addLesson(lang, levelId, lesson.name);
+          log(`  ✓ 課程「${lesson.name}」已建立`, 'log-ok');
+
+          for (const w of lesson.words) {
+            await DB.addWord(lang, levelId, lessonId, w);
+            log(`    ✓ ${w.word} — ${w.zh}`, 'log-ok');
+          }
+        }
+        log(`\n完成！共匯入 ${data.lessons.reduce((s,l)=>s+l.words.length,0)} 個詞彙`, 'log-ok');
+        log(`→ 前往 app.html?lang=${lang} 開始學習`);
+      } catch (e) {
+        log(`✗ 匯入失敗：${e.message}`, 'log-err');
+      }
+    }
+  </script>
+</body>
+</html>

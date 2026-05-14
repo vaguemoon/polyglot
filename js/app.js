@@ -256,7 +256,7 @@ function renderFC() {
   document.getElementById('fc-hint').textContent = '點擊看答案';
   document.getElementById('fc-zh').textContent   = w.zh || w.meaning || '';
 
-  ['fc-word', 'fc-phonetic', 'fc-notes', 'fc-tts'].forEach(id => {
+  ['fc-word', 'fc-phonetic', 'fc-notes', 'fc-tts', 'fc-image'].forEach(id => {
     document.getElementById(id).style.display = 'none';
   });
   document.getElementById('fc-answer-row').style.display = 'none';
@@ -298,8 +298,16 @@ function flipCard() {
       el.textContent   = w.notes;
       el.style.display = '';
     }
-    document.getElementById('fc-tts').style.display      = '';
+    document.getElementById('fc-tts').style.display        = '';
     document.getElementById('fc-answer-row').style.display = '';
+
+    const imgEl = document.getElementById('fc-image');
+    if (w.imageUrl) {
+      imgEl.src           = w.imageUrl;
+      imgEl.style.display = '';
+    } else {
+      imgEl.style.display = 'none';
+    }
 
     if (TTS.isEnabled() && w.word) TTS.speak(w.word, lang);
   }, 120);

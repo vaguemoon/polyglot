@@ -10,9 +10,90 @@
   <style>
     .loading-msg { color: var(--muted); padding: 28px; text-align: center; font-size: 0.9rem; }
     .error-msg   { color: var(--red);   padding: 20px; text-align: center; font-size: 0.88rem; }
-    .word-item-word { font-size: 1.1rem; font-weight: 700; color: var(--primary); }
-    .word-item-zh   { font-size: 0.88rem; color: var(--muted); }
-    .word-item-ph   { font-size: 0.78rem; color: var(--muted); font-style: italic; }
+
+    /* ── Words spreadsheet ───────────────────────────── */
+    .words-toolbar {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0 0 10px; gap: 8px; flex-wrap: wrap;
+    }
+    .words-count { font-size: 0.82rem; color: var(--muted); }
+
+    .word-table {
+      width: 100%; border-collapse: collapse; font-size: 0.88rem;
+      border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+    }
+    .word-table thead th {
+      padding: 9px 10px; text-align: left;
+      font-weight: 600; font-size: 0.75rem; color: var(--muted);
+      background: var(--bg);
+      border-bottom: 1.5px solid var(--border);
+      border-right: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .word-table thead th:last-child { border-right: none; }
+    .word-table tbody tr { border-bottom: 1px solid var(--border); }
+    .word-table tbody tr:last-child { border-bottom: none; }
+    .word-table tbody tr:hover { background: var(--bg); }
+    .word-table tbody td { border-right: 1px solid var(--border); padding: 0; }
+    .word-table tbody td:last-child { border-right: none; }
+    @keyframes flash-save { 0% { background: #dcfce7; } 100% { background: transparent; } }
+    .word-table tbody tr.row-saved { animation: flash-save 0.7s ease forwards; }
+
+    .cell-input {
+      display: block; width: 100%; border: none; background: transparent;
+      padding: 10px 10px; font-family: inherit; font-size: 0.88rem;
+      color: var(--text); outline: none; min-width: 0; box-sizing: border-box;
+    }
+    .cell-input:focus {
+      background: var(--surface);
+      box-shadow: inset 0 0 0 2px var(--primary);
+      border-radius: 4px;
+    }
+    .col-check { width: 36px; text-align: center; }
+    .col-word  { width: 22%; min-width: 110px; }
+    .col-zh    { width: 18%; min-width: 80px; }
+    .col-ph    { width: 20%; min-width: 100px; }
+
+    .batch-textarea {
+      width: 100%; min-height: 160px; resize: vertical;
+      font-family: monospace; font-size: 0.85rem;
+      border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+      padding: 10px 12px; background: var(--bg); color: var(--text);
+      outline: none; box-sizing: border-box; line-height: 1.6;
+    }
+    .batch-textarea:focus { border-color: var(--primary); }
+    .batch-hint { font-size: 0.78rem; color: var(--muted); margin-top: 8px; line-height: 1.6; }
+
+    /* ── Image column ─────────────────────── */
+    .col-img { width: 72px; text-align: center; }
+    .img-thumb {
+      width: 56px; height: 56px; margin: 4px auto;
+      border-radius: 6px; border: 1.5px dashed var(--border);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; overflow: hidden; transition: border-color 0.15s;
+    }
+    .img-thumb:hover { border-color: var(--primary); }
+    .img-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .img-thumb-empty { font-size: 1.1rem; color: var(--muted); pointer-events: none; }
+
+    /* ── Image modal ──────────────────────── */
+    .img-drop-zone {
+      border: 2px dashed var(--border); border-radius: var(--radius-sm);
+      padding: 20px 16px; text-align: center; cursor: pointer;
+      background: var(--bg); transition: border-color 0.15s, background 0.15s;
+      min-height: 150px; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 10px;
+    }
+    .img-drop-zone:hover, .img-drop-zone.dragover {
+      border-color: var(--primary); background: var(--primary-lt);
+    }
+    #img-preview { max-width: 100%; max-height: 200px; border-radius: 6px; object-fit: contain; }
+    .img-drop-hint { font-size: 0.8rem; color: var(--muted); line-height: 1.7; }
+    .img-modal-actions {
+      display: flex; flex-wrap: wrap; gap: 8px;
+      align-items: center; margin-top: 16px;
+    }
+    .img-modal-actions .spacer { flex: 1; }
   </style>
 </head>
 <body>
@@ -87,15 +168,37 @@
     <div class="topbar">
       <button class="topbar-back" onclick="showLessons()">←</button>
       <span class="topbar-title" id="words-title"></span>
-      <div class="topbar-actions">
-        <button class="btn btn-primary btn-sm" onclick="openWordModal()">+ 新增</button>
-      </div>
     </div>
-    <div class="page-content">
-      <div class="item-list" id="words-list"></div>
+    <div class="page-content" style="padding-top:12px">
+      <div class="words-toolbar">
+        <span class="words-count" id="words-count"></span>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center">
+          <button class="btn btn-danger btn-sm" id="delete-selected-btn"
+                  style="display:none" onclick="deleteSelected()">🗑 刪除選中</button>
+          <button class="btn btn-ghost btn-sm" onclick="openBatchPaste()">批次貼入</button>
+          <button class="btn btn-primary btn-sm" onclick="addWordRow()">+ 新增一筆</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="word-table">
+          <thead>
+            <tr>
+              <th class="col-check">
+                <input type="checkbox" id="check-all" onchange="toggleCheckAll(this)">
+              </th>
+              <th class="col-word" id="th-word">詞彙</th>
+              <th class="col-zh">中文</th>
+              <th class="col-ph">拼音</th>
+              <th>備註</th>
+              <th class="col-img">圖片</th>
+            </tr>
+          </thead>
+          <tbody id="words-tbody"></tbody>
+        </table>
+      </div>
       <div class="empty-state" id="words-empty" style="display:none">
         <div class="empty-icon">✏️</div>
-        <p>還沒有詞彙<br>點擊右上角新增</p>
+        <p>還沒有詞彙<br>點擊「+ 新增一筆」開始</p>
       </div>
     </div>
   </div>
@@ -130,29 +233,41 @@
     </div>
   </div>
 
-  <!-- ── Modal: Word ────────────────────────────────────────────────── -->
-  <div class="modal-overlay" id="word-modal">
+  <!-- ── Modal: Image ──────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="img-modal">
     <div class="modal">
-      <h3 id="word-modal-title">新增詞彙</h3>
-      <div class="form-field">
-        <label class="form-label" id="word-lang-label">詞彙</label>
-        <input class="form-input" id="word-word" type="text" placeholder="原文詞彙">
+      <h3 id="img-modal-title">設定圖片</h3>
+      <div class="img-drop-zone" id="img-drop-zone">
+        <img id="img-preview" style="display:none" alt="">
+        <div id="img-drop-hint-wrap">
+          <div style="font-size:2rem">📷</div>
+          <div class="img-drop-hint">拖放圖片到此處<br>或點擊選擇檔案 / Ctrl+V 貼上</div>
+        </div>
       </div>
-      <div class="form-field">
-        <label class="form-label">中文翻譯</label>
-        <input class="form-input" id="word-zh" type="text" placeholder="對應的中文意思">
+      <input type="file" id="img-file-input" accept="image/*" style="display:none">
+      <div class="img-modal-actions">
+        <button class="btn btn-ghost btn-sm" onclick="openGoogleImages()">🔍 Google 圖片</button>
+        <button class="btn btn-danger btn-sm" id="img-delete-btn" style="display:none" onclick="deleteImage()">🗑 移除圖片</button>
+        <div class="spacer"></div>
+        <button class="btn btn-ghost" onclick="closeModal('img-modal')">取消</button>
+        <button class="btn btn-primary" onclick="saveImage()">儲存</button>
       </div>
-      <div class="form-field">
-        <label class="form-label" id="word-ph-label">發音標記</label>
-        <input class="form-input" id="word-phonetic" type="text" placeholder="（選填）">
-      </div>
-      <div class="form-field">
-        <label class="form-label">備註 / 例句</label>
-        <input class="form-input" id="word-notes" type="text" placeholder="（選填）">
+    </div>
+  </div>
+
+  <!-- ── Modal: Batch Paste ────────────────────────────────────────── -->
+  <div class="modal-overlay" id="batch-modal">
+    <div class="modal">
+      <h3>批次貼入詞彙</h3>
+      <textarea class="batch-textarea" id="batch-textarea"
+        placeholder="안녕하세요 | 你好 | annyeonghaseyo&#10;감사합니다 | 謝謝 | gamsahamnida&#10;네 | 是"></textarea>
+      <div class="batch-hint">
+        每行一筆，用 <strong>|</strong> 分隔欄位<br>
+        格式：詞彙 | 中文 | 拼音（選填）| 備註（選填）
       </div>
       <div class="modal-actions">
-        <button class="btn btn-ghost" onclick="closeModal('word-modal')">取消</button>
-        <button class="btn btn-primary" onclick="saveWord()">儲存</button>
+        <button class="btn btn-ghost" onclick="closeModal('batch-modal')">取消</button>
+        <button class="btn btn-primary" onclick="importBatchPaste()">匯入</button>
       </div>
     </div>
   </div>

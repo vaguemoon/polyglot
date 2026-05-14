@@ -5,6 +5,11 @@ let curLessonId = null, curLessonName = '';
 let editingId = null;
 let wordsCache = [];
 
+// Image modal state
+let imgModalTr      = null;
+let imgPendingDataUrl = null;  // null = no change, '' = delete, 'data:...' = new image
+let imgPendingChange  = false;
+
 const langNames      = { ko: '韓語', vi: '越南語' };
 const wordLangLabels = { ko: '韓文詞彙', vi: '越南文詞彙' };
 const phonLabels     = { ko: '羅馬拼音 (RR)', vi: '聲調 / 拼音（可省略）' };
@@ -48,9 +53,9 @@ document.addEventListener('keydown', e => {
   if (!open) return;
   if (e.key === 'Escape') { open.classList.remove('open'); editingId = null; return; }
   if (e.key !== 'Enter' || open.id === 'confirm-modal') return;
-  if (open.id === 'level-modal')  saveLevel();
+  if (open.id === 'level-modal')   saveLevel();
   else if (open.id === 'lesson-modal') saveLesson();
-  else if (open.id === 'word-modal')   saveWord();
+  else if (open.id === 'batch-modal')  importBatchPaste();
 });
 
 // ── Language selection ───────────────────────────────────────────────────────
@@ -174,75 +179,373 @@ async function saveLesson() {
   }
 }
 
-// ── Words ────────────────────────────────────────────────────────────────────
+// ── Words (spreadsheet) ──────────────────────────────────────────────────────
 
 async function showWords(lessonId, lessonName) {
   if (lessonId) { curLessonId = lessonId; curLessonName = lessonName; }
   showPage('pg-words');
   document.getElementById('words-title').textContent = curLessonName;
-  const list  = document.getElementById('words-list');
-  const empty = document.getElementById('words-empty');
-  list.innerHTML = '<div class="loading-msg">載入中…</div>';
+  document.getElementById('th-word').textContent = wordLangLabels[lang] || '詞彙';
+
+  const tbody = document.getElementById('words-tbody');
+  tbody.innerHTML = '<tr><td colspan="5" class="loading-msg">載入中…</td></tr>';
 
   try {
     wordsCache = await DB.getWords(lang, curLevelId, curLessonId);
-    list.innerHTML = '';
-    if (!wordsCache.length) { empty.style.display = ''; return; }
-    empty.style.display = 'none';
-
-    wordsCache.forEach(word => {
-      const sub   = [word.zh, word.phonetic].filter(Boolean).join(' · ');
-      const div   = makeItem({
-        icon:    null,
-        title:   word.word || '',
-        titleClass: 'word-item-word',
-        sub,
-        extra:   word.notes || '',
-        onEdit:  () => openWordModal(word.id, word),
-        onDelete:() => confirmDelete('word', word.id, word.word || '詞彙'),
-      });
-      list.appendChild(div);
-    });
+    renderWordsTable();
   } catch (e) {
-    list.innerHTML = `<div class="error-msg">載入失敗：${e.message}</div>`;
+    tbody.innerHTML = `<tr><td colspan="5" class="error-msg">載入失敗：${e.message}</td></tr>`;
   }
 }
 
-function openWordModal(id = null, data = null) {
-  editingId = id;
-  document.getElementById('word-modal-title').textContent    = id ? '編輯詞彙' : '新增詞彙';
-  document.getElementById('word-lang-label').textContent     = wordLangLabels[lang] || '詞彙';
-  document.getElementById('word-ph-label').textContent       = phonLabels[lang] || '發音標記';
-  document.getElementById('word-word').value                 = data?.word     || '';
-  document.getElementById('word-zh').value                   = data?.zh       || data?.meaning || '';
-  document.getElementById('word-phonetic').value             = data?.phonetic || data?.romanization || '';
-  document.getElementById('word-notes').value                = data?.notes    || '';
-  openModal('word-modal');
+function renderWordsTable() {
+  const tbody = document.getElementById('words-tbody');
+  tbody.innerHTML = '';
+  wordsCache.forEach(w => tbody.appendChild(makeWordRow(w)));
+  document.getElementById('words-empty').style.display = wordsCache.length ? 'none' : '';
+  const ca = document.getElementById('check-all');
+  if (ca) { ca.checked = false; ca.indeterminate = false; }
+  updateWordsCount();
+  updateDeleteBtn();
 }
 
-async function saveWord() {
-  const word     = document.getElementById('word-word').value.trim();
-  const zh       = document.getElementById('word-zh').value.trim();
-  const phonetic = document.getElementById('word-phonetic').value.trim();
-  const notes    = document.getElementById('word-notes').value.trim();
+function makeWordRow(data = {}) {
+  const tr = document.createElement('tr');
+  if (data.id) tr.dataset.id = data.id;
 
-  if (!word) { toast('請輸入詞彙', true); return; }
-  if (!zh)   { toast('請輸入中文翻譯', true); return; }
+  const phLabel = { ko: '羅馬拼音 (RR)', vi: '聲調拼音' };
+  const fields = [
+    { key: 'word',     ph: wordLangLabels[lang] || '詞彙' },
+    { key: 'zh',       ph: '中文翻譯' },
+    { key: 'phonetic', ph: phLabel[lang] || '拼音' },
+    { key: 'notes',    ph: '備註 / 例句' },
+  ];
 
-  const data = { word, zh, ...(phonetic && { phonetic }), ...(notes && { notes }) };
+  const tdCk = document.createElement('td');
+  tdCk.style.cssText = 'text-align:center;width:36px';
+  const ck = document.createElement('input');
+  ck.type = 'checkbox';
+  ck.className = 'row-check';
+  ck.addEventListener('change', updateDeleteBtn);
+  tdCk.appendChild(ck);
+  tr.appendChild(tdCk);
+
+  fields.forEach(({ key, ph }) => {
+    const td = document.createElement('td');
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'cell-input';
+    inp.dataset.field = key;
+    inp.value = data[key] || '';
+    inp.placeholder = ph;
+
+    inp.addEventListener('blur', () => autoSaveRow(tr));
+
+    if (key === 'notes') {
+      inp.addEventListener('keydown', e => {
+        if (e.key === 'Tab' && !e.shiftKey) {
+          const tbody = document.getElementById('words-tbody');
+          if (tr === tbody.lastElementChild) { e.preventDefault(); addWordRow(); }
+        }
+      });
+    }
+
+    td.appendChild(inp);
+    tr.appendChild(td);
+  });
+
+  // Image cell
+  const tdImg = document.createElement('td');
+  tdImg.className = 'col-img';
+  const thumb = document.createElement('div');
+  thumb.className = 'img-thumb';
+  thumb.addEventListener('click', e => { e.stopPropagation(); openImageModal(tr); });
+  if (data.imageUrl) {
+    tr.dataset.imageUrl = data.imageUrl;
+    const img = document.createElement('img');
+    img.src = data.imageUrl;
+    thumb.appendChild(img);
+  } else {
+    thumb.innerHTML = '<span class="img-thumb-empty">📷</span>';
+  }
+  tdImg.appendChild(thumb);
+  tr.appendChild(tdImg);
+
+  return tr;
+}
+
+function getRowData(tr) {
+  const d = {};
+  tr.querySelectorAll('.cell-input').forEach(inp => { d[inp.dataset.field] = inp.value.trim(); });
+  return d;
+}
+
+async function autoSaveRow(tr) {
+  const d = getRowData(tr);
+  if (!d.word || !d.zh) return;
+
+  const payload = { word: d.word, zh: d.zh, phonetic: d.phonetic, notes: d.notes };
 
   try {
-    if (editingId) {
-      await DB.updateWord(lang, curLevelId, curLessonId, editingId, data);
-      toast('已更新詞彙');
+    if (tr.dataset.id) {
+      await DB.updateWord(lang, curLevelId, curLessonId, tr.dataset.id, payload);
     } else {
-      await DB.addWord(lang, curLevelId, curLessonId, data);
-      toast('已新增詞彙');
+      const id = await DB.addWord(lang, curLevelId, curLessonId, payload);
+      tr.dataset.id = id;
+      wordsCache.push({ id, ...payload });
+      document.getElementById('words-empty').style.display = 'none';
+      updateWordsCount();
     }
-    closeModal('word-modal');
-    showWords();
+    tr.classList.remove('row-saved');
+    void tr.offsetWidth;
+    tr.classList.add('row-saved');
   } catch (e) {
     toast('儲存失敗：' + e.message, true);
+  }
+}
+
+function addWordRow() {
+  document.getElementById('words-tbody').appendChild(makeWordRow());
+  document.getElementById('words-empty').style.display = 'none';
+  document.querySelector('#words-tbody tr:last-child .cell-input')?.focus();
+}
+
+function updateWordsCount() {
+  const n = document.querySelectorAll('#words-tbody tr[data-id]').length;
+  const el = document.getElementById('words-count');
+  if (el) el.textContent = `${n} 個詞彙`;
+}
+
+function updateDeleteBtn() {
+  const all     = document.querySelectorAll('#words-tbody .row-check');
+  const checked = document.querySelectorAll('#words-tbody .row-check:checked');
+  const btn = document.getElementById('delete-selected-btn');
+  if (btn) {
+    btn.style.display = checked.length ? '' : 'none';
+    btn.textContent = `🗑 刪除選中 (${checked.length})`;
+  }
+  const ca = document.getElementById('check-all');
+  if (ca && all.length) {
+    ca.checked       = checked.length === all.length;
+    ca.indeterminate = checked.length > 0 && checked.length < all.length;
+  }
+}
+
+function toggleCheckAll(cb) {
+  document.querySelectorAll('#words-tbody .row-check').forEach(ck => { ck.checked = cb.checked; });
+  updateDeleteBtn();
+}
+
+async function deleteSelected() {
+  const rows = Array.from(document.querySelectorAll('#words-tbody .row-check:checked'))
+    .map(cb => cb.closest('tr'));
+  if (!rows.length) return;
+
+  document.getElementById('confirm-msg').textContent =
+    `確定要刪除選中的 ${rows.length} 筆詞彙嗎？此動作無法復原。`;
+
+  document.getElementById('confirm-ok').onclick = async () => {
+    try {
+      for (const tr of rows) {
+        if (tr.dataset.id) {
+          await DB.deleteWord(lang, curLevelId, curLessonId, tr.dataset.id);
+          wordsCache = wordsCache.filter(w => w.id !== tr.dataset.id);
+        }
+        tr.remove();
+      }
+      closeModal('confirm-modal');
+      toast(`已刪除 ${rows.length} 筆`);
+      updateWordsCount();
+      updateDeleteBtn();
+      const ca = document.getElementById('check-all');
+      if (ca) { ca.checked = false; ca.indeterminate = false; }
+      if (!document.querySelectorAll('#words-tbody tr[data-id]').length) {
+        document.getElementById('words-empty').style.display = '';
+      }
+    } catch (e) {
+      toast('刪除失敗：' + e.message, true);
+    }
+  };
+  openModal('confirm-modal');
+}
+
+// ── Image modal ───────────────────────────────────────────────────────────────
+
+function openImageModal(tr) {
+  imgModalTr       = tr;
+  imgPendingDataUrl = null;
+  imgPendingChange  = false;
+
+  const currentUrl = tr.dataset.imageUrl || '';
+  const preview    = document.getElementById('img-preview');
+  const hintWrap   = document.getElementById('img-drop-hint-wrap');
+  const deleteBtn  = document.getElementById('img-delete-btn');
+
+  if (currentUrl) {
+    preview.src            = currentUrl;
+    preview.style.display  = '';
+    hintWrap.style.display = 'none';
+    deleteBtn.style.display = '';
+  } else {
+    preview.style.display  = 'none';
+    hintWrap.style.display = '';
+    deleteBtn.style.display = 'none';
+  }
+
+  const word = tr.querySelector('.cell-input[data-field="word"]')?.value.trim() || '詞彙';
+  document.getElementById('img-modal-title').textContent = `設定圖片 — ${word}`;
+  openModal('img-modal');
+}
+
+function openGoogleImages() {
+  const word = imgModalTr?.querySelector('.cell-input[data-field="word"]')?.value.trim();
+  if (!word) { toast('請先填入詞彙', true); return; }
+  window.open('https://www.google.com/search?q=' + encodeURIComponent(word) + '&tbm=isch', '_blank');
+}
+
+function deleteImage() {
+  imgPendingDataUrl = '';
+  imgPendingChange  = true;
+  document.getElementById('img-preview').style.display  = 'none';
+  document.getElementById('img-drop-hint-wrap').style.display = '';
+  document.getElementById('img-delete-btn').style.display     = 'none';
+}
+
+async function saveImage() {
+  if (!imgModalTr) return;
+  if (!imgPendingChange) { closeModal('img-modal'); return; }
+
+  if (!imgModalTr.dataset.id) {
+    toast('請先填入詞彙和中文翻譯儲存後再設定圖片', true);
+    return;
+  }
+
+  const dataUrl = imgPendingDataUrl;
+  try {
+    await DB.updateWord(lang, curLevelId, curLessonId, imgModalTr.dataset.id, { imageUrl: dataUrl });
+    imgModalTr.dataset.imageUrl = dataUrl;
+    updateRowThumbnail(imgModalTr, dataUrl);
+    closeModal('img-modal');
+    toast(dataUrl ? '圖片已儲存' : '圖片已移除');
+  } catch (e) {
+    toast('儲存失敗：' + e.message, true);
+  }
+}
+
+function updateRowThumbnail(tr, dataUrl) {
+  const thumb = tr.querySelector('.img-thumb');
+  if (!thumb) return;
+  if (dataUrl) {
+    thumb.innerHTML = '';
+    const img = document.createElement('img');
+    img.src = dataUrl;
+    thumb.appendChild(img);
+  } else {
+    thumb.innerHTML = '<span class="img-thumb-empty">📷</span>';
+  }
+}
+
+function compressImage(file, maxPx, quality, callback) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const src = new Image();
+    src.onload = () => {
+      let w = src.width, h = src.height;
+      if (w > maxPx || h > maxPx) {
+        if (w >= h) { h = Math.round(h * maxPx / w); w = maxPx; }
+        else        { w = Math.round(w * maxPx / h); h = maxPx; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width  = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(src, 0, 0, w, h);
+      callback(canvas.toDataURL('image/jpeg', quality));
+    };
+    src.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function processImageFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  compressImage(file, 400, 0.82, dataUrl => {
+    const sizeKB = Math.round(dataUrl.length / 1024);
+    if (sizeKB > 900) { toast(`圖片壓縮後仍過大（${sizeKB}KB），請換一張較小的圖`, true); return; }
+    imgPendingDataUrl = dataUrl;
+    imgPendingChange  = true;
+
+    const preview  = document.getElementById('img-preview');
+    preview.src            = dataUrl;
+    preview.style.display  = '';
+    document.getElementById('img-drop-hint-wrap').style.display = 'none';
+    document.getElementById('img-delete-btn').style.display     = '';
+  });
+}
+
+// Drop zone events
+(function () {
+  const zone = document.getElementById('img-drop-zone');
+  zone.addEventListener('click',     () => document.getElementById('img-file-input').click());
+  zone.addEventListener('dragover',  e  => { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('dragover');
+    processImageFile(e.dataTransfer.files[0]);
+  });
+
+  document.getElementById('img-file-input').addEventListener('change', e => {
+    processImageFile(e.target.files[0]);
+    e.target.value = '';
+  });
+
+  // Paste anywhere while modal is open
+  document.addEventListener('paste', e => {
+    if (!document.querySelector('#img-modal.open')) return;
+    const item = Array.from(e.clipboardData.items).find(i => i.type.startsWith('image/'));
+    if (item) processImageFile(item.getAsFile());
+  });
+})();
+
+// ── Batch paste ───────────────────────────────────────────────────────────────
+
+function openBatchPaste() {
+  document.getElementById('batch-textarea').value = '';
+  openModal('batch-modal');
+  setTimeout(() => document.getElementById('batch-textarea').focus(), 150);
+}
+
+async function importBatchPaste() {
+  const lines = document.getElementById('batch-textarea').value
+    .split('\n').map(l => l.trim()).filter(Boolean);
+  if (!lines.length) { toast('沒有內容可匯入', true); return; }
+
+  const tbody = document.getElementById('words-tbody');
+  let added = 0;
+
+  for (const line of lines) {
+    const parts = line.split('|').map(s => s.trim());
+    if (parts.length < 2 || !parts[0] || !parts[1]) continue;
+    const payload = {
+      word: parts[0], zh: parts[1],
+      phonetic: parts[2] || '', notes: parts[3] || '',
+    };
+    try {
+      const id = await DB.addWord(lang, curLevelId, curLessonId, payload);
+      wordsCache.push({ id, ...payload });
+      tbody.appendChild(makeWordRow({ id, ...payload }));
+      added++;
+    } catch { /* 略過失敗的行 */ }
+  }
+
+  closeModal('batch-modal');
+  if (added) {
+    toast(`已匯入 ${added} 筆詞彙`);
+    document.getElementById('words-empty').style.display = 'none';
+    updateWordsCount();
+    updateDeleteBtn();
+  } else {
+    toast('沒有符合格式的詞彙（格式：詞彙 | 中文）', true);
   }
 }
 

@@ -61,6 +61,11 @@
     }
     .tts-round:hover  { background: var(--primary); color: #fff; }
     .tts-round:active { transform: scale(0.88); }
+    .fc-image {
+      max-width: 100%; max-height: 160px;
+      border-radius: 10px; object-fit: contain;
+      margin-top: 4px;
+    }
     .answer-row { display: flex; gap: 16px; margin-top: 20px; }
     .answer-row .btn { flex: 1; padding: 16px; font-size: 1rem; border-radius: var(--radius); }
     .btn-wrong   { background: #fee2e2; color: #dc2626; }
@@ -258,6 +263,7 @@
         <div class="fc-notes"    id="fc-notes"    style="display:none"></div>
         <button class="tts-round" id="fc-tts"     style="display:none"
                 onclick="event.stopPropagation(); playTTS()">🔊</button>
+        <img class="fc-image" id="fc-image" style="display:none" alt="">
       </div>
       <div class="answer-row" id="fc-answer-row" style="display:none">
         <button class="btn btn-wrong"   onclick="fcMark(false)">✗ 不會</button>
