@@ -53,9 +53,9 @@ document.addEventListener('keydown', e => {
   if (!open) return;
   if (e.key === 'Escape') { open.classList.remove('open'); editingId = null; return; }
   if (e.key !== 'Enter' || open.id === 'confirm-modal') return;
-  if (open.id === 'level-modal')   saveLevel();
-  else if (open.id === 'lesson-modal') saveLesson();
-  else if (open.id === 'batch-modal')  importBatchPaste();
+  if (open.id === 'level-modal')        saveLevel();
+  else if (open.id === 'lesson-modal')  saveLesson();
+  else if (open.id === 'batch-modal')   importBatchPaste();
 });
 
 // ── Language selection ───────────────────────────────────────────────────────
@@ -138,11 +138,19 @@ async function showLessons(levelId, levelName) {
     empty.style.display = 'none';
 
     for (const lesson of lessons) {
-      const words = await DB.getWords(lang, curLevelId, lesson.id);
+      const [words, dialogues, patterns] = await Promise.all([
+        DB.getWords(lang, curLevelId, lesson.id),
+        DB.getDialogues(lang, curLevelId, lesson.id),
+        DB.getPatterns(lang, curLevelId, lesson.id),
+      ]);
+      const parts = [];
+      if (words.length)     parts.push(`${words.length} 詞`);
+      if (dialogues.length) parts.push(`${dialogues.length} 對話`);
+      if (patterns.length)  parts.push(`${patterns.length} 句型`);
       const div = makeItem({
         icon:    '📖',
         title:   lesson.name,
-        sub:     `${words.length} 個詞彙`,
+        sub:     parts.length ? parts.join(' · ') : '尚無內容',
         onClick: () => showWords(lesson.id, lesson.name),
         onEdit:  () => openLessonModal(lesson.id, lesson.name),
         onDelete:() => confirmDelete('lesson', lesson.id, lesson.name),
@@ -186,6 +194,7 @@ async function showWords(lessonId, lessonName) {
   showPage('pg-words');
   document.getElementById('words-title').textContent = curLessonName;
   document.getElementById('th-word').textContent = wordLangLabels[lang] || '詞彙';
+  switchTab('words');
 
   const tbody = document.getElementById('words-tbody');
   tbody.innerHTML = '<tr><td colspan="5" class="loading-msg">載入中…</td></tr>';
@@ -617,4 +626,302 @@ function makeItem({ icon, title, titleClass, sub, extra, onClick, onEdit, onDele
   if (onDelete)div.querySelector('.delete-btn').addEventListener('click', e => { e.stopPropagation(); onDelete(); });
 
   return div;
+}
+
+// ── Content tabs ─────────────────────────────────────────────────────────────
+
+function switchTab(tab) {
+  ['words', 'dialogues', 'patterns'].forEach(t => {
+    document.getElementById(`tab-${t}`).classList.toggle('active', t === tab);
+    document.getElementById(`tab-content-${t}`).style.display = t === tab ? '' : 'none';
+  });
+  if (tab === 'dialogues') loadDialogues();
+  if (tab === 'patterns')  loadPatterns();
+}
+
+// ── Dialogues ─────────────────────────────────────────────────────────────────
+
+let dialoguesCache = [];
+
+async function loadDialogues() {
+  const list  = document.getElementById('dialogues-list');
+  const empty = document.getElementById('dialogues-empty');
+  list.innerHTML = '<div class="loading-msg">載入中…</div>';
+
+  try {
+    dialoguesCache = await DB.getDialogues(lang, curLevelId, curLessonId);
+    renderDialogueList();
+  } catch (e) {
+    list.innerHTML = `<div class="error-msg">載入失敗：${e.message}</div>`;
+  }
+}
+
+function renderDialogueList() {
+  const list  = document.getElementById('dialogues-list');
+  const empty = document.getElementById('dialogues-empty');
+  list.innerHTML = '';
+
+  if (!dialoguesCache.length) { empty.style.display = ''; return; }
+  empty.style.display = 'none';
+
+  document.getElementById('dialogues-count').textContent = `${dialoguesCache.length} 段對話`;
+
+  dialoguesCache.forEach((dial, idx) => {
+    const lines = dial.lines || [];
+    const card  = document.createElement('div');
+    card.className = 'dial-card';
+
+    const linesHtml = lines.map(l => `
+      <div class="dial-line">
+        <span class="dial-line-speaker">${escHtml(l.speaker)}:</span>
+        <span class="dial-line-text">${escHtml(l.text)}<span class="dial-line-zh"> ／ ${escHtml(l.zh)}</span></span>
+      </div>`).join('');
+
+    card.innerHTML = `
+      <div class="dial-card-head">
+        <div class="dial-card-title"></div>
+        <span class="dial-card-meta">${lines.length} 行</span>
+        <button class="btn btn-ghost btn-icon btn-sm" title="展開">▾</button>
+        <button class="btn btn-danger btn-icon btn-sm" title="刪除">🗑</button>
+      </div>
+      <div class="dial-card-body">${linesHtml || '<div style="color:var(--muted);font-size:0.8rem">無台詞</div>'}</div>
+    `;
+
+    card.querySelector('.dial-card-title').textContent = dial.title || `對話 ${idx + 1}`;
+    card.querySelector('[title="展開"]').addEventListener('click', () => card.classList.toggle('open'));
+    card.querySelector('[title="刪除"]').addEventListener('click', () => confirmDeleteDialogue(dial.id, dial.title || `對話 ${idx + 1}`));
+    list.appendChild(card);
+  });
+}
+
+function escHtml(str) {
+  return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function confirmDeleteDialogue(id, title) {
+  document.getElementById('confirm-msg').textContent = `確定要刪除對話「${title}」嗎？`;
+  document.getElementById('confirm-ok').onclick = async () => {
+    try {
+      await DB.deleteDialogue(lang, curLevelId, curLessonId, id);
+      closeModal('confirm-modal');
+      toast('已刪除');
+      loadDialogues();
+    } catch (e) { toast('刪除失敗：' + e.message, true); }
+  };
+  openModal('confirm-modal');
+}
+
+function openDialogueBatch() {
+  document.getElementById('batch-dial-textarea').value = '';
+  openModal('batch-dial-modal');
+  setTimeout(() => document.getElementById('batch-dial-textarea').focus(), 150);
+}
+
+async function importDialogueBatch() {
+  const raw = document.getElementById('batch-dial-textarea').value;
+  const dialogues = parseDialogueBatch(raw);
+
+  if (!dialogues.length) { toast('沒有有效的對話內容', true); return; }
+
+  let added = 0;
+  for (const dial of dialogues) {
+    try {
+      await DB.addDialogue(lang, curLevelId, curLessonId, dial);
+      added++;
+    } catch { /* skip */ }
+  }
+
+  closeModal('batch-dial-modal');
+  if (added) {
+    toast(`已匯入 ${added} 段對話`);
+    loadDialogues();
+  } else {
+    toast('匯入失敗', true);
+  }
+}
+
+function parseDialogueBatch(raw) {
+  const dialogues = [];
+  let curTitle = '';
+  let curLines = [];
+  let lineOrder = 0;
+
+  function flush() {
+    if (curLines.length) {
+      dialogues.push({ title: curTitle, lines: curLines });
+    }
+  }
+
+  raw.split('\n').forEach(rawLine => {
+    const line = rawLine.trim();
+    if (!line) { flush(); curTitle = ''; curLines = []; lineOrder = 0; return; }
+
+    if (line.startsWith('#')) {
+      flush(); curTitle = line.slice(1).trim(); curLines = []; lineOrder = 0; return;
+    }
+
+    // speaker: text | zh | phonetic
+    const colonIdx = line.indexOf(':');
+    if (colonIdx < 1) return;
+    const speaker = line.slice(0, colonIdx).trim();
+    const rest    = line.slice(colonIdx + 1).trim();
+    const parts   = rest.split('|').map(s => s.trim());
+    if (!parts[0]) return;
+
+    lineOrder++;
+    curLines.push({
+      speaker,
+      text:     parts[0] || '',
+      zh:       parts[1] || '',
+      phonetic: parts[2] || '',
+      order:    lineOrder,
+    });
+  });
+
+  flush();
+  return dialogues;
+}
+
+// ── Patterns ──────────────────────────────────────────────────────────────────
+
+let patternsCache = [];
+
+async function loadPatterns() {
+  const list  = document.getElementById('patterns-list');
+  const empty = document.getElementById('patterns-empty');
+  list.innerHTML = '<div class="loading-msg">載入中…</div>';
+
+  try {
+    patternsCache = await DB.getPatterns(lang, curLevelId, curLessonId);
+    renderPatternList();
+  } catch (e) {
+    list.innerHTML = `<div class="error-msg">載入失敗：${e.message}</div>`;
+  }
+}
+
+function renderPatternList() {
+  const list  = document.getElementById('patterns-list');
+  const empty = document.getElementById('patterns-empty');
+  list.innerHTML = '';
+
+  if (!patternsCache.length) { empty.style.display = ''; return; }
+  empty.style.display = 'none';
+
+  document.getElementById('patterns-count').textContent = `${patternsCache.length} 個句型`;
+
+  patternsCache.forEach(pat => {
+    const examples = pat.examples || [];
+    const slots    = pat.slots || [];
+    const card = document.createElement('div');
+    card.className = 'pat-card';
+
+    const exHtml = examples.map(ex =>
+      `<div style="font-size:0.82rem;padding:2px 0">${escHtml(ex.text)} <span style="color:var(--muted)">／ ${escHtml(ex.zh)}</span></div>`
+    ).join('');
+    const slotHtml = slots.map(s =>
+      `<span style="display:inline-block;background:var(--primary-lt);color:var(--primary);border-radius:4px;padding:2px 8px;margin:2px;font-size:0.78rem">${escHtml(s.word)}</span>`
+    ).join('');
+
+    card.innerHTML = `
+      <div class="pat-card-head">
+        <div class="pat-card-framework"></div>
+        <span class="pat-card-meta">${examples.length} 例句 · ${slots.length} 詞槽</span>
+        <button class="btn btn-danger btn-icon btn-sm" title="刪除">🗑</button>
+      </div>
+      ${pat.explanation ? `<div class="pat-card-explanation"></div>` : ''}
+      ${exHtml || slotHtml ? `<div style="padding:0 14px 10px">${exHtml}<div style="margin-top:6px">${slotHtml}</div></div>` : ''}
+    `;
+
+    card.querySelector('.pat-card-framework').textContent = pat.pattern || '（未命名句型）';
+    if (pat.explanation) card.querySelector('.pat-card-explanation').textContent = pat.explanation;
+    card.querySelector('[title="刪除"]').addEventListener('click', () => confirmDeletePattern(pat.id, pat.pattern));
+    list.appendChild(card);
+  });
+}
+
+function confirmDeletePattern(id, name) {
+  document.getElementById('confirm-msg').textContent = `確定要刪除句型「${name}」嗎？`;
+  document.getElementById('confirm-ok').onclick = async () => {
+    try {
+      await DB.deletePattern(lang, curLevelId, curLessonId, id);
+      closeModal('confirm-modal');
+      toast('已刪除');
+      loadPatterns();
+    } catch (e) { toast('刪除失敗：' + e.message, true); }
+  };
+  openModal('confirm-modal');
+}
+
+function openPatternBatch() {
+  document.getElementById('batch-pat-textarea').value = '';
+  openModal('batch-pat-modal');
+  setTimeout(() => document.getElementById('batch-pat-textarea').focus(), 150);
+}
+
+async function importPatternBatch() {
+  const raw = document.getElementById('batch-pat-textarea').value;
+  const patterns = parsePatternBatch(raw);
+
+  if (!patterns.length) { toast('沒有有效的句型內容', true); return; }
+
+  let added = 0;
+  for (const pat of patterns) {
+    try {
+      await DB.addPattern(lang, curLevelId, curLessonId, pat);
+      added++;
+    } catch { /* skip */ }
+  }
+
+  closeModal('batch-pat-modal');
+  if (added) {
+    toast(`已匯入 ${added} 個句型`);
+    loadPatterns();
+  } else {
+    toast('匯入失敗', true);
+  }
+}
+
+function parsePatternBatch(raw) {
+  const patterns = [];
+  let cur = null;
+
+  function flush() {
+    if (cur && cur.pattern) patterns.push(cur);
+  }
+
+  raw.split('\n').forEach(rawLine => {
+    const line = rawLine.trim();
+    if (!line) { flush(); cur = null; return; }
+
+    if (line.startsWith('#')) {
+      flush();
+      cur = { pattern: line.slice(1).trim(), explanation: '', notes: '', examples: [], slots: [] };
+      return;
+    }
+
+    if (!cur) return;
+
+    const colonIdx = line.indexOf(':');
+    if (colonIdx < 1) return;
+    const prefix = line.slice(0, colonIdx).trim();
+    const value  = line.slice(colonIdx + 1).trim();
+
+    if (prefix === '說明') { cur.explanation = value; return; }
+    if (prefix === '備註') { cur.notes = value; return; }
+
+    if (prefix === '例句') {
+      const parts = value.split('|').map(s => s.trim());
+      if (parts[0]) cur.examples.push({ text: parts[0], zh: parts[1] || '' });
+      return;
+    }
+
+    if (prefix === '詞槽') {
+      const parts = value.split('|').map(s => s.trim());
+      if (parts[0]) cur.slots.push({ word: parts[0], zh: parts[1] || '' });
+      return;
+    }
+  });
+
+  flush();
+  return patterns;
 }

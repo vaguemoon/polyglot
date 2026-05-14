@@ -1,4 +1,4 @@
-// Polyglot learning app — 4 modes: flashcard / listening / quiz / spelling
+// Polyglot learning app
 const params   = new URLSearchParams(location.search);
 const lang     = params.get('lang') || 'ko';
 const langName = { ko: '韓語', vi: '越南語' }[lang] || lang;
@@ -9,17 +9,42 @@ document.title = `Polyglot — ${langName}`;
 // ── Global state ────────────────────────────────────────────────────────────
 let curLevelId = null, curLevelName = '';
 let curLessonId = null, curLessonName = '';
-let curWords = [];       // shuffled word list for this session
+let curWords = [];
 let curIdx = 0;
-let curMode = null;      // 'flashcard' | 'listening' | 'quiz' | 'spelling'
-let sessionRes = [];     // [{wordId, correct}]
+let curMode = null;
+let curSessionType = 'word'; // 'word' | 'dial' | 'pat'
+let sessionRes = [];
 let progressMap = {};
 let fcFlipped = false;
 let spellInputMode = false;
 let spellAvailable = [];
 let spellSelected = [];
 
+// Dialogue / Pattern data
+let curDialogues = [];
+let curPatterns  = [];
+
+// Dialogue mode state
+let dialItems       = [];
+let dialIdx         = 0;
+let dialFlipped     = false;
+let dialItemRes     = [];
+let dialOrderPlaced = [];
+let dialOrderAvail  = [];
+
+// Pattern mode state
+let patItems        = [];
+let patIdx          = 0;
+let patFlipped      = false;
+let patItemRes      = [];
+let patOrderPlaced  = [];
+let patOrderAvail   = [];
+
 // ── Utilities ───────────────────────────────────────────────────────────────
+
+function esc(str) {
+  return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
 function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -46,12 +71,12 @@ function shuffle(arr) {
   return a;
 }
 
-function updateStudyHdr(prefix, idx, total, correct) {
+function updateStudyHdr(prefix, idx, total, correct, unit = '張') {
   const pct = total > 0 ? Math.round(idx / total * 100) : 0;
-  document.getElementById(`${prefix}-badge`).textContent      = `${idx + 1} / ${total}`;
-  document.getElementById(`${prefix}-card-label`).textContent = `第 ${idx + 1} 張，共 ${total} 張`;
-  document.getElementById(`${prefix}-score-label`).textContent= `答對 ${correct}`;
-  document.getElementById(`${prefix}-fill`).style.width       = pct + '%';
+  document.getElementById(`${prefix}-badge`).textContent       = `${idx + 1} / ${total}`;
+  document.getElementById(`${prefix}-card-label`).textContent  = `第 ${idx + 1} ${unit}，共 ${total} ${unit}`;
+  document.getElementById(`${prefix}-score-label`).textContent = `答對 ${correct}`;
+  document.getElementById(`${prefix}-fill`).style.width        = pct + '%';
 }
 
 function recordResult(correct) {
@@ -203,32 +228,72 @@ async function navToModes(lessonId, lessonName) {
   showPage('pg-modes');
   document.getElementById('modes-lesson-title').textContent = curLessonName;
 
-  let words;
+  let words, dialogues, patterns;
   try {
-    words = await DB.getWords(lang, curLevelId, curLessonId);
+    [words, dialogues, patterns, progressMap] = await Promise.all([
+      DB.getWords(lang, curLevelId, curLessonId),
+      DB.getDialogues(lang, curLevelId, curLessonId),
+      DB.getPatterns(lang, curLevelId, curLessonId),
+      DB.getAllProgress(lang),
+    ]);
   } catch (e) {
-    toast('無法載入詞彙');
+    toast('無法載入課程內容');
     return;
   }
 
-  if (!words.length) {
-    toast('此課程還沒有詞彙');
-    return;
+  curDialogues = dialogues;
+  curPatterns  = patterns;
+
+  // ── Word section ──
+  const wordSection = document.getElementById('modes-word-section');
+  if (words.length) {
+    wordSection.style.display = '';
+    document.getElementById('modes-word-count').textContent = `${words.length} 詞`;
+    const needMCQ = words.length < 4;
+    document.getElementById('mode-btn-listen').disabled = needMCQ;
+    document.getElementById('mode-btn-quiz').disabled   = needMCQ;
+    document.getElementById('mcq-min-notice').style.display = needMCQ ? '' : 'none';
+    const unmastered = words.filter(w => (progressMap[w.id]?.stars || 0) < 3);
+    const mastered   = words.filter(w => (progressMap[w.id]?.stars || 0) >= 3);
+    curWords = [...shuffle(unmastered), ...shuffle(mastered)];
+  } else {
+    wordSection.style.display = 'none';
+    curWords = [];
   }
 
-  document.getElementById('modes-word-count').textContent = `${words.length} 詞`;
+  // ── Dialogue section ──
+  const dialSection = document.getElementById('modes-dial-section');
+  if (dialogues.length) {
+    dialSection.style.display = '';
+    document.getElementById('modes-dial-count').textContent = `${dialogues.length} 段`;
+    const totalLines = dialogues.reduce((s, d) => s + (d.lines || []).length, 0);
+    const needLines  = totalLines < 4;
+    document.getElementById('mode-btn-dial-fill').disabled  = needLines;
+    document.getElementById('mode-btn-dial-cloze').disabled = needLines;
+    document.getElementById('dial-min-notice').style.display = needLines ? '' : 'none';
+  } else {
+    dialSection.style.display = 'none';
+  }
 
-  // Disable MCQ modes if fewer than 4 words
-  const needMCQ = words.length < 4;
-  document.getElementById('mode-btn-listen').disabled = needMCQ;
-  document.getElementById('mode-btn-quiz').disabled   = needMCQ;
-  document.getElementById('mcq-min-notice').style.display = needMCQ ? '' : 'none';
+  // ── Pattern section ──
+  const patSection = document.getElementById('modes-pat-section');
+  if (patterns.length) {
+    patSection.style.display = '';
+    document.getElementById('modes-pat-count').textContent = `${patterns.length} 個`;
+    const totalExamples = patterns.reduce((s, p) => s + (p.examples || []).length, 0);
+    const totalSlots    = patterns.reduce((s, p) => s + (p.slots || []).length, 0);
+    const needSlots     = totalSlots < 2;
+    const needExamples  = totalExamples < 4;
+    document.getElementById('mode-btn-pat-fill').disabled  = needSlots;
+    document.getElementById('mode-btn-pat-zh2f').disabled  = needExamples;
+    document.getElementById('pat-min-notice').style.display = (needSlots || needExamples) ? '' : 'none';
+  } else {
+    patSection.style.display = 'none';
+  }
 
-  // Cache words for session
-  progressMap = await DB.getAllProgress(lang);
-  const unmastered = words.filter(w => (progressMap[w.id]?.stars || 0) < 3);
-  const mastered   = words.filter(w => (progressMap[w.id]?.stars || 0) >= 3);
-  curWords = [...shuffle(unmastered), ...shuffle(mastered)];
+  if (!words.length && !dialogues.length && !patterns.length) {
+    toast('此課程還沒有任何學習內容');
+  }
 }
 
 async function startMode(mode) {
@@ -507,21 +572,44 @@ function exitMode() {
 }
 
 async function restartMode() {
-  curIdx     = 0;
-  sessionRes = [];
-  curWords   = shuffle(curWords);
-  startMode(curMode);
+  if      (curSessionType === 'dial') startDialogueMode(curMode);
+  else if (curSessionType === 'pat')  startPatternMode(curMode);
+  else { curIdx = 0; sessionRes = []; curWords = shuffle(curWords); startMode(curMode); }
 }
 
 // ── Results ──────────────────────────────────────────────────────────────────
+
+function aggregateToGroup(items, groupKey) {
+  const groups = {};
+  items.forEach(item => {
+    const key = item[groupKey];
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(item.correct);
+  });
+  return Object.entries(groups).map(([id, arr]) => ({
+    wordId: id,
+    correct: arr.filter(Boolean).length / arr.length >= 0.5,
+  }));
+}
 
 async function showResults() {
   TTS.cancel();
   showPage('pg-results');
 
-  const correct = sessionRes.filter(r => r.correct).length;
-  const wrong   = sessionRes.length - correct;
-  const pct     = sessionRes.length > 0 ? Math.round(correct / sessionRes.length * 100) : 0;
+  let saveRes;
+  if (curSessionType === 'dial') {
+    saveRes = curMode === 'dial-order'
+      ? dialItemRes.map(r => ({ wordId: r.dialogueId, correct: r.correct }))
+      : aggregateToGroup(dialItemRes, 'dialogueId');
+  } else if (curSessionType === 'pat') {
+    saveRes = aggregateToGroup(patItemRes, 'patternId');
+  } else {
+    saveRes = sessionRes;
+  }
+
+  const correct = saveRes.filter(r => r.correct).length;
+  const wrong   = saveRes.length - correct;
+  const pct     = saveRes.length > 0 ? Math.round(correct / saveRes.length * 100) : 0;
 
   document.getElementById('res-correct').textContent = correct;
   document.getElementById('res-wrong').textContent   = wrong;
@@ -537,10 +625,584 @@ async function showResults() {
   document.getElementById('res-sub').textContent   = `${sub}（答對率 ${pct}%）`;
 
   try {
-    await DB.saveSessionResults(lang, sessionRes, progressMap);
+    await DB.saveSessionResults(lang, saveRes, progressMap);
   } catch {
     toast('進度儲存失敗');
   }
+}
+
+// ── Dialogue mode entry ──────────────────────────────────────────────────────
+
+function buildDialLines() {
+  return curDialogues.flatMap(d =>
+    (d.lines || []).map(l => ({
+      ...l, dialogueId: d.id, dialogueTitle: d.title || '',
+    }))
+  );
+}
+
+function startDialogueMode(mode) {
+  curMode        = mode;
+  curSessionType = 'dial';
+  dialIdx        = 0;
+  dialItemRes    = [];
+
+  const setTitle = id => { document.getElementById(id).textContent = curLessonName; };
+
+  if (mode === 'dial-read') {
+    dialItems   = shuffle(buildDialLines());
+    dialFlipped = false;
+    setTitle('dr-lesson-title');
+    showPage('pg-dial-read');
+    renderDialRead();
+
+  } else if (mode === 'dial-fill') {
+    dialItems = shuffle(buildDialLines());
+    setTitle('df-lesson-title');
+    showPage('pg-dial-fill');
+    renderDialFill();
+
+  } else if (mode === 'dial-order') {
+    dialItems = shuffle([...curDialogues]);
+    setTitle('do-lesson-title');
+    showPage('pg-dial-order');
+    renderDialOrder();
+
+  } else if (mode === 'dial-cloze') {
+    dialItems = buildClozeItems();
+    if (!dialItems.length) { toast('無法建立克漏字題目'); return; }
+    setTitle('dc-lesson-title');
+    showPage('pg-dial-cloze');
+    renderDialCloze();
+  }
+}
+
+// ── Dialogue: 逐行閱讀 ────────────────────────────────────────────────────────
+
+function renderDialRead() {
+  dialFlipped = false;
+  const item    = dialItems[dialIdx];
+  const correct = dialItemRes.filter(r => r.correct).length;
+  updateStudyHdr('dr', dialIdx, dialItems.length, correct, '行');
+
+  document.getElementById('dr-meta').textContent =
+    `對話：${item.dialogueTitle || '未命名'}`;
+
+  document.getElementById('dr-hint').textContent = '點擊看台詞';
+  document.getElementById('dr-zh').textContent   = item.zh || '';
+  ['dr-speaker','dr-text','dr-phonetic','dr-tts'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
+  document.getElementById('dr-answer-row').style.display = 'none';
+}
+
+function dialReadFlip() {
+  if (dialFlipped) return;
+  dialFlipped = true;
+  const item = dialItems[dialIdx];
+  const card = document.getElementById('dr-card');
+  card.style.transition = 'opacity 0.12s';
+  card.style.opacity    = '0.6';
+  setTimeout(() => {
+    card.style.opacity = '1';
+    document.getElementById('dr-hint').textContent = '你記得嗎？';
+    const sp = document.getElementById('dr-speaker');
+    sp.textContent   = item.speaker || '';
+    sp.style.display = '';
+    const tx = document.getElementById('dr-text');
+    tx.textContent   = item.text || '';
+    tx.style.display = '';
+    if (item.phonetic) {
+      const ph = document.getElementById('dr-phonetic');
+      ph.textContent   = item.phonetic;
+      ph.style.display = '';
+    }
+    document.getElementById('dr-tts').style.display        = '';
+    document.getElementById('dr-answer-row').style.display = '';
+    if (TTS.isEnabled() && item.text) TTS.speak(item.text, lang);
+  }, 120);
+}
+
+function drPlayTTS() {
+  const item = dialItems[dialIdx];
+  if (item?.text) TTS.speak(item.text, lang);
+}
+
+function dialReadMark(correct) {
+  dialItemRes.push({ dialogueId: dialItems[dialIdx].dialogueId, correct });
+  dialIdx++;
+  if (dialIdx >= dialItems.length) showResults();
+  else renderDialRead();
+}
+
+// ── Dialogue: 聆聽填空 ────────────────────────────────────────────────────────
+
+function renderDialFill() {
+  const item    = dialItems[dialIdx];
+  const correct = dialItemRes.filter(r => r.correct).length;
+  updateStudyHdr('df', dialIdx, dialItems.length, correct, '題');
+
+  const container = document.getElementById('df-choices');
+  container.innerHTML = '';
+
+  const others      = dialItems.filter((_, i) => i !== dialIdx);
+  const distractors = shuffle(others).slice(0, 3);
+  const choices     = shuffle([item, ...distractors]);
+
+  choices.forEach(choice => {
+    const btn = document.createElement('button');
+    btn.className   = 'mcq-choice';
+    btn.textContent = choice.zh || '';
+    btn.addEventListener('click', () => dfAnswer(btn, choice === item));
+    container.appendChild(btn);
+  });
+
+  if (TTS.isEnabled() && item.text) setTimeout(() => TTS.speak(item.text, lang), 300);
+}
+
+function dfPlayTTS() {
+  const item = dialItems[dialIdx];
+  if (item?.text) TTS.speak(item.text, lang);
+}
+
+function dfAnswer(btn, correct) {
+  document.querySelectorAll('#df-choices .mcq-choice').forEach(b => b.disabled = true);
+  dialItemRes.push({ dialogueId: dialItems[dialIdx].dialogueId, correct });
+  btn.classList.add(correct ? 'correct' : 'wrong');
+  if (!correct) {
+    const correctZh = dialItems[dialIdx].zh;
+    document.querySelectorAll('#df-choices .mcq-choice').forEach(b => {
+      if (b.textContent === correctZh) b.classList.add('correct');
+    });
+  }
+  setTimeout(() => {
+    dialIdx++;
+    if (dialIdx >= dialItems.length) showResults();
+    else renderDialFill();
+  }, 1000);
+}
+
+// ── Dialogue: 排序對話 ────────────────────────────────────────────────────────
+
+function renderDialOrder() {
+  const dial    = dialItems[dialIdx];
+  const correct = dialItemRes.filter(r => r.correct).length;
+  updateStudyHdr('do', dialIdx, dialItems.length, correct, '段');
+
+  document.getElementById('do-meta').textContent =
+    `對話：${dial.title || dial.dialogueTitle || `第 ${dialIdx + 1} 段`}`;
+
+  const lines = dial.lines || [];
+  dialOrderPlaced = [];
+  dialOrderAvail  = shuffle(lines.map((l, i) => ({ ...l, origIdx: i })));
+
+  document.getElementById('do-feedback').style.display = 'none';
+  renderDialOrderTiles();
+}
+
+function renderDialOrderTiles() {
+  const placedEl = document.getElementById('do-placed');
+  const availEl  = document.getElementById('do-available');
+
+  placedEl.innerHTML = '';
+  dialOrderPlaced.forEach((line, i) => {
+    const tile = document.createElement('div');
+    tile.className   = 'order-tile';
+    const numSpan = document.createElement('span');
+    numSpan.className   = 'order-tile-num';
+    numSpan.textContent = `${i + 1}.`;
+    tile.appendChild(numSpan);
+    tile.appendChild(document.createTextNode(escLine(line)));
+    tile.addEventListener('click', () => doRemove(i));
+    placedEl.appendChild(tile);
+  });
+
+  availEl.innerHTML = '';
+  dialOrderAvail.forEach((line, i) => {
+    const tile = document.createElement('div');
+    tile.className   = 'order-tile';
+    tile.textContent = escLine(line);
+    tile.addEventListener('click', () => doPlace(i));
+    availEl.appendChild(tile);
+  });
+}
+
+function escLine(line) {
+  return `${line.speaker || ''}: ${line.zh || ''}`;
+}
+
+function doPlace(i) {
+  dialOrderPlaced.push(dialOrderAvail.splice(i, 1)[0]);
+  renderDialOrderTiles();
+}
+
+function doRemove(i) {
+  dialOrderAvail.push(dialOrderPlaced.splice(i, 1)[0]);
+  renderDialOrderTiles();
+}
+
+function doUndo() {
+  if (!dialOrderPlaced.length) return;
+  doRemove(dialOrderPlaced.length - 1);
+}
+
+function doConfirm() {
+  const dial  = dialItems[dialIdx];
+  const lines = dial.lines || [];
+  if (dialOrderPlaced.length !== lines.length) {
+    toast('請排列所有台詞');
+    return;
+  }
+  const correct = dialOrderPlaced.every((line, i) => line.origIdx === i);
+  dialItemRes.push({ dialogueId: dial.id || dial.dialogueId, correct });
+
+  const fb = document.getElementById('do-feedback');
+  fb.style.display = '';
+  fb.className     = `spell-feedback ${correct ? 'ok' : 'bad'}`;
+  fb.textContent   = correct ? '✓ 順序正確！' : '✗ 順序有誤';
+
+  setTimeout(() => {
+    dialIdx++;
+    if (dialIdx >= dialItems.length) showResults();
+    else renderDialOrder();
+  }, 1300);
+}
+
+// ── Dialogue: 克漏字 ──────────────────────────────────────────────────────────
+
+function buildClozeItems() {
+  const allLines  = buildDialLines();
+  const allTokens = allLines.flatMap(l => (l.text || '').split(' ').filter(Boolean));
+  return allLines.map(line => {
+    const tokens = (line.text || '').split(' ').filter(Boolean);
+    if (tokens.length < 2) return null;
+    const blankIdx    = Math.floor(Math.random() * tokens.length);
+    const blankedWord = tokens[blankIdx];
+    const display     = tokens.map((t, i) => i === blankIdx ? '___' : t).join(' ');
+    const others      = shuffle(allTokens.filter(t => t !== blankedWord));
+    const choices     = shuffle([blankedWord, ...others.slice(0, 3)]);
+    return { ...line, displayText: display, blankedWord, choices };
+  }).filter(Boolean);
+}
+
+function renderDialCloze() {
+  const item    = dialItems[dialIdx];
+  const correct = dialItemRes.filter(r => r.correct).length;
+  updateStudyHdr('dc', dialIdx, dialItems.length, correct, '題');
+
+  const card = document.getElementById('dc-card');
+  card.innerHTML = `
+    <div class="cloze-speaker">${esc(item.speaker)}</div>
+    <div class="cloze-text">${esc(item.displayText).replace('___', '<span class="cloze-blank">___</span>')}</div>
+    <div class="cloze-zh">${esc(item.zh)}</div>
+  `;
+
+  const container = document.getElementById('dc-choices');
+  container.innerHTML = '';
+  item.choices.forEach(word => {
+    const btn = document.createElement('button');
+    btn.className   = 'mcq-choice';
+    btn.textContent = word;
+    btn.addEventListener('click', () => dcAnswer(btn, word === item.blankedWord));
+    container.appendChild(btn);
+  });
+}
+
+function dcAnswer(btn, correct) {
+  document.querySelectorAll('#dc-choices .mcq-choice').forEach(b => b.disabled = true);
+  dialItemRes.push({ dialogueId: dialItems[dialIdx].dialogueId, correct });
+  btn.classList.add(correct ? 'correct' : 'wrong');
+  if (!correct) {
+    const correctWord = dialItems[dialIdx].blankedWord;
+    document.querySelectorAll('#dc-choices .mcq-choice').forEach(b => {
+      if (b.textContent === correctWord) b.classList.add('correct');
+    });
+  }
+  setTimeout(() => {
+    dialIdx++;
+    if (dialIdx >= dialItems.length) showResults();
+    else renderDialCloze();
+  }, 1000);
+}
+
+// ── Pattern mode entry ───────────────────────────────────────────────────────
+
+function buildPatExamples() {
+  return curPatterns.flatMap(p =>
+    (p.examples || []).map(ex => ({ ...ex, patternId: p.id, pattern: p.pattern }))
+  );
+}
+
+function startPatternMode(mode) {
+  curMode        = mode;
+  curSessionType = 'pat';
+  patIdx         = 0;
+  patItemRes     = [];
+
+  const setTitle = id => { document.getElementById(id).textContent = curLessonName; };
+
+  if (mode === 'pat-fc') {
+    patItems   = shuffle(buildPatExamples());
+    patFlipped = false;
+    setTitle('pf-lesson-title');
+    showPage('pg-pat-fc');
+    renderPatFc();
+
+  } else if (mode === 'pat-fill') {
+    patItems = buildPatFillItems();
+    if (!patItems.length) { toast('無法建立填空題'); return; }
+    setTitle('pfill-lesson-title');
+    showPage('pg-pat-fill');
+    renderPatFill();
+
+  } else if (mode === 'pat-zh2f') {
+    patItems = shuffle(buildPatExamples());
+    setTitle('pz-lesson-title');
+    showPage('pg-pat-zh2f');
+    renderPatZh2f();
+
+  } else if (mode === 'pat-order') {
+    patItems = shuffle(buildPatExamples().filter(ex => ex.text && ex.text.includes(' ')));
+    if (!patItems.length) { toast('例句字數太少，無法排列'); return; }
+    setTitle('po-lesson-title');
+    showPage('pg-pat-order');
+    renderPatOrder();
+  }
+}
+
+// ── Pattern: 例句閃卡 ─────────────────────────────────────────────────────────
+
+function renderPatFc() {
+  patFlipped = false;
+  const item    = patItems[patIdx];
+  const correct = patItemRes.filter(r => r.correct).length;
+  updateStudyHdr('pf', patIdx, patItems.length, correct, '張');
+
+  document.getElementById('pf-hint').textContent   = '點擊看例句';
+  document.getElementById('pf-zh').textContent      = item.zh || '';
+  ['pf-text','pf-pattern','pf-tts'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
+  document.getElementById('pf-answer-row').style.display = 'none';
+}
+
+function patFcFlip() {
+  if (patFlipped) return;
+  patFlipped = true;
+  const item = patItems[patIdx];
+  const card = document.getElementById('pf-card');
+  card.style.transition = 'opacity 0.12s';
+  card.style.opacity    = '0.6';
+  setTimeout(() => {
+    card.style.opacity = '1';
+    document.getElementById('pf-hint').textContent = '你記得嗎？';
+    const tx = document.getElementById('pf-text');
+    tx.textContent   = item.text || '';
+    tx.style.display = '';
+    const pt = document.getElementById('pf-pattern');
+    pt.textContent   = item.pattern || '';
+    pt.style.display = item.pattern ? '' : 'none';
+    document.getElementById('pf-tts').style.display        = '';
+    document.getElementById('pf-answer-row').style.display = '';
+    if (TTS.isEnabled() && item.text) TTS.speak(item.text, lang);
+  }, 120);
+}
+
+function pfPlayTTS() {
+  const item = patItems[patIdx];
+  if (item?.text) TTS.speak(item.text, lang);
+}
+
+function patFcMark(correct) {
+  patItemRes.push({ patternId: patItems[patIdx].patternId, correct });
+  patIdx++;
+  if (patIdx >= patItems.length) showResults();
+  else renderPatFc();
+}
+
+// ── Pattern: 替換填空 ─────────────────────────────────────────────────────────
+
+function buildPatFillItems() {
+  const allSlots = curPatterns.flatMap(p =>
+    (p.slots || []).map(s => ({ word: s.word, zh: s.zh, patternId: p.id }))
+  );
+  return shuffle(curPatterns.flatMap(pat => {
+    const slots = pat.slots || [];
+    if (!slots.length) return [];
+    return slots.map(slot => {
+      const others    = allSlots.filter(s => s.word !== slot.word);
+      const distractors = shuffle(others).slice(0, 3).map(s => s.word);
+      const choices   = shuffle([slot.word, ...distractors]);
+      return {
+        patternId:   pat.id,
+        pattern:     pat.pattern || '',
+        explanation: pat.explanation || '',
+        slotZh:      slot.zh || '',
+        slotWord:    slot.word,
+        choices,
+      };
+    });
+  }));
+}
+
+function renderPatFill() {
+  const item    = patItems[patIdx];
+  const correct = patItemRes.filter(r => r.correct).length;
+  updateStudyHdr('pfill', patIdx, patItems.length, correct, '題');
+
+  const frame = document.getElementById('pfill-frame');
+  frame.innerHTML = `
+    <div class="pat-frame-text">${esc(item.pattern)}</div>
+    ${item.explanation ? `<div class="pat-frame-expl">${esc(item.explanation)}</div>` : ''}
+    <div class="pat-sentence">選出「<strong>${esc(item.slotZh)}</strong>」的說法：</div>
+  `;
+
+  const container = document.getElementById('pfill-choices');
+  container.innerHTML = '';
+  item.choices.forEach(word => {
+    const btn = document.createElement('button');
+    btn.className   = 'mcq-choice';
+    btn.textContent = word;
+    btn.addEventListener('click', () => pfillAnswer(btn, word === item.slotWord));
+    container.appendChild(btn);
+  });
+}
+
+function pfillAnswer(btn, correct) {
+  document.querySelectorAll('#pfill-choices .mcq-choice').forEach(b => b.disabled = true);
+  patItemRes.push({ patternId: patItems[patIdx].patternId, correct });
+  btn.classList.add(correct ? 'correct' : 'wrong');
+  if (!correct) {
+    const correctWord = patItems[patIdx].slotWord;
+    document.querySelectorAll('#pfill-choices .mcq-choice').forEach(b => {
+      if (b.textContent === correctWord) b.classList.add('correct');
+    });
+  }
+  setTimeout(() => {
+    patIdx++;
+    if (patIdx >= patItems.length) showResults();
+    else renderPatFill();
+  }, 1000);
+}
+
+// ── Pattern: 中翻外文 ─────────────────────────────────────────────────────────
+
+function renderPatZh2f() {
+  const item    = patItems[patIdx];
+  const correct = patItemRes.filter(r => r.correct).length;
+  updateStudyHdr('pz', patIdx, patItems.length, correct, '題');
+
+  document.getElementById('pz-zh').textContent = item.zh || '';
+
+  const others      = patItems.filter((_, i) => i !== patIdx);
+  const distractors = shuffle(others).slice(0, 3);
+  const choices     = shuffle([item, ...distractors]);
+
+  const container = document.getElementById('pz-choices');
+  container.innerHTML = '';
+  choices.forEach(choice => {
+    const btn = document.createElement('button');
+    btn.className   = 'mcq-choice';
+    btn.textContent = choice.text || '';
+    btn.addEventListener('click', () => pzAnswer(btn, choice === item));
+    container.appendChild(btn);
+  });
+}
+
+function pzAnswer(btn, correct) {
+  document.querySelectorAll('#pz-choices .mcq-choice').forEach(b => b.disabled = true);
+  patItemRes.push({ patternId: patItems[patIdx].patternId, correct });
+  btn.classList.add(correct ? 'correct' : 'wrong');
+  if (!correct) {
+    const correctText = patItems[patIdx].text;
+    document.querySelectorAll('#pz-choices .mcq-choice').forEach(b => {
+      if (b.textContent === correctText) b.classList.add('correct');
+    });
+  }
+  setTimeout(() => {
+    patIdx++;
+    if (patIdx >= patItems.length) showResults();
+    else renderPatZh2f();
+  }, 1000);
+}
+
+// ── Pattern: 造句排列 ─────────────────────────────────────────────────────────
+
+function renderPatOrder() {
+  const item    = patItems[patIdx];
+  const correct = patItemRes.filter(r => r.correct).length;
+  updateStudyHdr('po', patIdx, patItems.length, correct, '題');
+
+  document.getElementById('po-zh').textContent = item.zh || '';
+
+  const words     = (item.text || '').split(' ').filter(Boolean);
+  patOrderPlaced  = [];
+  patOrderAvail   = shuffle(words.map((w, i) => ({ w, origIdx: i })));
+
+  document.getElementById('po-feedback').style.display = 'none';
+  renderPatOrderTiles();
+}
+
+function renderPatOrderTiles() {
+  const placedEl = document.getElementById('po-placed');
+  const availEl  = document.getElementById('po-available');
+
+  placedEl.innerHTML = '';
+  patOrderPlaced.forEach((item, i) => {
+    const tile = document.createElement('div');
+    tile.className   = 'order-tile';
+    tile.textContent = item.w;
+    tile.addEventListener('click', () => poRemove(i));
+    placedEl.appendChild(tile);
+  });
+
+  availEl.innerHTML = '';
+  patOrderAvail.forEach((item, i) => {
+    const tile = document.createElement('div');
+    tile.className   = 'order-tile';
+    tile.textContent = item.w;
+    tile.addEventListener('click', () => poPlace(i));
+    availEl.appendChild(tile);
+  });
+}
+
+function poPlace(i) {
+  patOrderPlaced.push(patOrderAvail.splice(i, 1)[0]);
+  renderPatOrderTiles();
+}
+
+function poRemove(i) {
+  patOrderAvail.push(patOrderPlaced.splice(i, 1)[0]);
+  renderPatOrderTiles();
+}
+
+function poUndo() {
+  if (!patOrderPlaced.length) return;
+  poRemove(patOrderPlaced.length - 1);
+}
+
+function poConfirm() {
+  const item  = patItems[patIdx];
+  const words = (item.text || '').split(' ').filter(Boolean);
+  if (patOrderPlaced.length !== words.length) {
+    toast('請排列所有詞語');
+    return;
+  }
+  const correct = patOrderPlaced.every((p, i) => p.origIdx === i);
+  patItemRes.push({ patternId: item.patternId, correct });
+
+  const fb = document.getElementById('po-feedback');
+  fb.style.display = '';
+  fb.className     = `spell-feedback ${correct ? 'ok' : 'bad'}`;
+  fb.textContent   = correct ? `✓ 正確！${item.text}` : `✗ 正確順序：${item.text}`;
+
+  if (TTS.isEnabled() && item.text) TTS.speak(item.text, lang);
+
+  setTimeout(() => {
+    patIdx++;
+    if (patIdx >= patItems.length) showResults();
+    else renderPatOrder();
+  }, 1400);
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────

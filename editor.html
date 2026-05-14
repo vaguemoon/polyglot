@@ -64,6 +64,52 @@
     .batch-textarea:focus { border-color: var(--primary); }
     .batch-hint { font-size: 0.78rem; color: var(--muted); margin-top: 8px; line-height: 1.6; }
 
+    /* ── Content tabs ────────────────────── */
+    .content-tabs {
+      display: flex; gap: 0; margin-bottom: 14px;
+      border-bottom: 2px solid var(--border);
+    }
+    .content-tab {
+      padding: 8px 18px; font-size: 0.88rem; font-weight: 600;
+      cursor: pointer; border: none; background: none;
+      color: var(--muted); border-bottom: 2px solid transparent;
+      margin-bottom: -2px; font-family: inherit;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .content-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+    .content-tab:hover:not(.active) { color: var(--text); }
+
+    /* ── Dialogue list ────────────────────── */
+    .dial-card {
+      background: var(--surface); border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm); margin-bottom: 10px; overflow: hidden;
+    }
+    .dial-card-head {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 14px; cursor: pointer;
+    }
+    .dial-card-title { font-weight: 600; font-size: 0.9rem; flex: 1; }
+    .dial-card-meta  { font-size: 0.75rem; color: var(--muted); }
+    .dial-card-body  { border-top: 1px solid var(--border); padding: 10px 14px; display: none; }
+    .dial-card.open .dial-card-body { display: block; }
+    .dial-line { font-size: 0.83rem; line-height: 1.7; padding: 3px 0; display: flex; gap: 8px; }
+    .dial-line-speaker { font-weight: 600; color: var(--primary); min-width: 52px; }
+    .dial-line-text { flex: 1; }
+    .dial-line-zh { color: var(--muted); font-size: 0.78rem; }
+
+    /* ── Pattern list ─────────────────────── */
+    .pat-card {
+      background: var(--surface); border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm); margin-bottom: 10px; overflow: hidden;
+    }
+    .pat-card-head {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 14px;
+    }
+    .pat-card-framework { font-weight: 700; font-size: 0.92rem; flex: 1; color: var(--primary); }
+    .pat-card-meta { font-size: 0.75rem; color: var(--muted); }
+    .pat-card-explanation { font-size: 0.8rem; color: var(--muted); padding: 0 14px 10px; }
+
     /* ── Image column ─────────────────────── */
     .col-img { width: 72px; text-align: center; }
     .img-thumb {
@@ -163,43 +209,81 @@
     </div>
   </div>
 
-  <!-- ── Page: Words ────────────────────────────────────────────────── -->
+  <!-- ── Page: Words / Dialogues / Patterns ──────────────────────── -->
   <div class="page" id="pg-words">
     <div class="topbar">
       <button class="topbar-back" onclick="showLessons()">←</button>
       <span class="topbar-title" id="words-title"></span>
     </div>
     <div class="page-content" style="padding-top:12px">
-      <div class="words-toolbar">
-        <span class="words-count" id="words-count"></span>
-        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center">
-          <button class="btn btn-danger btn-sm" id="delete-selected-btn"
-                  style="display:none" onclick="deleteSelected()">🗑 刪除選中</button>
-          <button class="btn btn-ghost btn-sm" onclick="openBatchPaste()">批次貼入</button>
-          <button class="btn btn-primary btn-sm" onclick="addWordRow()">+ 新增一筆</button>
+
+      <!-- Tabs -->
+      <div class="content-tabs">
+        <button class="content-tab active" id="tab-words"     onclick="switchTab('words')">詞彙</button>
+        <button class="content-tab"        id="tab-dialogues" onclick="switchTab('dialogues')">對話</button>
+        <button class="content-tab"        id="tab-patterns"  onclick="switchTab('patterns')">句型</button>
+      </div>
+
+      <!-- ── 詞彙 tab ── -->
+      <div id="tab-content-words">
+        <div class="words-toolbar">
+          <span class="words-count" id="words-count"></span>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center">
+            <button class="btn btn-danger btn-sm" id="delete-selected-btn"
+                    style="display:none" onclick="deleteSelected()">🗑 刪除選中</button>
+            <button class="btn btn-ghost btn-sm" onclick="openBatchPaste()">批次貼入</button>
+            <button class="btn btn-primary btn-sm" onclick="addWordRow()">+ 新增一筆</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="word-table">
+            <thead>
+              <tr>
+                <th class="col-check">
+                  <input type="checkbox" id="check-all" onchange="toggleCheckAll(this)">
+                </th>
+                <th class="col-word" id="th-word">詞彙</th>
+                <th class="col-zh">中文</th>
+                <th class="col-ph">拼音</th>
+                <th>備註</th>
+                <th class="col-img">圖片</th>
+              </tr>
+            </thead>
+            <tbody id="words-tbody"></tbody>
+          </table>
+        </div>
+        <div class="empty-state" id="words-empty" style="display:none">
+          <div class="empty-icon">✏️</div>
+          <p>還沒有詞彙<br>點擊「+ 新增一筆」開始</p>
         </div>
       </div>
-      <div style="overflow-x:auto">
-        <table class="word-table">
-          <thead>
-            <tr>
-              <th class="col-check">
-                <input type="checkbox" id="check-all" onchange="toggleCheckAll(this)">
-              </th>
-              <th class="col-word" id="th-word">詞彙</th>
-              <th class="col-zh">中文</th>
-              <th class="col-ph">拼音</th>
-              <th>備註</th>
-              <th class="col-img">圖片</th>
-            </tr>
-          </thead>
-          <tbody id="words-tbody"></tbody>
-        </table>
+
+      <!-- ── 對話 tab ── -->
+      <div id="tab-content-dialogues" style="display:none">
+        <div class="words-toolbar">
+          <span class="words-count" id="dialogues-count"></span>
+          <button class="btn btn-primary btn-sm" onclick="openDialogueBatch()">批次貼入對話</button>
+        </div>
+        <div id="dialogues-list"></div>
+        <div class="empty-state" id="dialogues-empty" style="display:none">
+          <div class="empty-icon">💬</div>
+          <p>還沒有對話<br>點擊「批次貼入對話」開始</p>
+        </div>
       </div>
-      <div class="empty-state" id="words-empty" style="display:none">
-        <div class="empty-icon">✏️</div>
-        <p>還沒有詞彙<br>點擊「+ 新增一筆」開始</p>
+
+      <!-- ── 句型 tab ── -->
+      <div id="tab-content-patterns" style="display:none">
+        <div class="words-toolbar">
+          <span class="words-count" id="patterns-count"></span>
+          <button class="btn btn-primary btn-sm" onclick="openPatternBatch()">批次貼入句型</button>
+        </div>
+        <div id="patterns-list"></div>
+        <div class="empty-state" id="patterns-empty" style="display:none">
+          <div class="empty-icon">📐</div>
+          <p>還沒有句型<br>點擊「批次貼入句型」開始</p>
+        </div>
       </div>
+
     </div>
   </div>
 
@@ -268,6 +352,43 @@
       <div class="modal-actions">
         <button class="btn btn-ghost" onclick="closeModal('batch-modal')">取消</button>
         <button class="btn btn-primary" onclick="importBatchPaste()">匯入</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal: Batch Dialogue ────────────────────────────────────── -->
+  <div class="modal-overlay" id="batch-dial-modal">
+    <div class="modal">
+      <h3>批次貼入對話</h3>
+      <textarea class="batch-textarea" id="batch-dial-textarea" placeholder="# 日常問候&#10;A: 안녕하세요! | 你好！ | annyeonghaseyo&#10;B: 안녕하세요! | 你好！&#10;A: 잘 지내요? | 最近好嗎？&#10;&#10;# 自我介紹&#10;A: 저는 민준이에요. | 我是民俊。&#10;B: 반가워요! | 很高興認識你！"></textarea>
+      <div class="batch-hint">
+        用 <strong>#</strong> 開頭行作為對話標題，每行台詞格式：<br>
+        <strong>角色名: 台詞 | 中文翻譯 | 拼音（選填）</strong><br>
+        空行分隔不同段對話；角色名可任意命名（A/B 或 店員/客人等）
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeModal('batch-dial-modal')">取消</button>
+        <button class="btn btn-primary" onclick="importDialogueBatch()">匯入</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal: Batch Pattern ──────────────────────────────────────── -->
+  <div class="modal-overlay" id="batch-pat-modal">
+    <div class="modal">
+      <h3>批次貼入句型</h3>
+      <textarea class="batch-textarea" id="batch-pat-textarea" placeholder="# ～은/는 ～이에요&#10;說明: 「～是～」，用於介紹或描述&#10;例句: 저는 학생이에요. | 我是學生。&#10;例句: 이것은 책이에요. | 這是書。&#10;詞槽: 학생 | 學生&#10;詞槽: 선생님 | 老師&#10;備註: 이에요/예요 取決於前面音節的收尾音&#10;&#10;# ～을/를 좋아해요&#10;說明: 「喜歡～」&#10;例句: 저는 음악을 좋아해요. | 我喜歡音樂。&#10;詞槽: 음악 | 音樂&#10;詞槽: 영화 | 電影"></textarea>
+      <div class="batch-hint">
+        用 <strong>#</strong> 開頭行作為句型框架名稱，接著可填：<br>
+        <strong>說明:</strong> 中文說明 &nbsp;|&nbsp;
+        <strong>例句:</strong> 原文 | 中文 &nbsp;|&nbsp;
+        <strong>詞槽:</strong> 詞彙 | 中文 &nbsp;|&nbsp;
+        <strong>備註:</strong> 補充（選填）<br>
+        空行分隔不同句型
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeModal('batch-pat-modal')">取消</button>
+        <button class="btn btn-primary" onclick="importPatternBatch()">匯入</button>
       </div>
     </div>
   </div>

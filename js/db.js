@@ -1,6 +1,8 @@
-// Firestore CRUD for levels, lessons, words, and progress
+// Firestore CRUD for levels, lessons, words, dialogues, patterns, and progress
 // Path: /languages/{lang}/levels/{lid}/lessons/{lid2}/words/{wid}
-// Progress: /languages/{lang}/progress/{wordId}
+//       /languages/{lang}/levels/{lid}/lessons/{lid2}/dialogues/{did}  (lines stored as array)
+//       /languages/{lang}/levels/{lid}/lessons/{lid2}/patterns/{pid}   (examples/slots as arrays)
+// Progress: /languages/{lang}/progress/{id}  (works for word, dialogue, or pattern IDs)
 
 const DB = (() => {
   function langRef(lang) {
@@ -54,14 +56,17 @@ const DB = (() => {
   }
 
   async function deleteLesson(lang, levelId, lessonId) {
-    const words = await getWords(lang, levelId, lessonId);
-    for (const w of words) {
-      await langRef(lang).collection('levels').doc(levelId)
-        .collection('lessons').doc(lessonId)
-        .collection('words').doc(w.id).delete();
-    }
-    await langRef(lang).collection('levels').doc(levelId)
-      .collection('lessons').doc(lessonId).delete();
+    const [words, dialogues, patterns] = await Promise.all([
+      getWords(lang, levelId, lessonId),
+      getDialogues(lang, levelId, lessonId),
+      getPatterns(lang, levelId, lessonId),
+    ]);
+    const lessonBase = langRef(lang).collection('levels').doc(levelId)
+      .collection('lessons').doc(lessonId);
+    for (const w of words)    await lessonBase.collection('words').doc(w.id).delete();
+    for (const d of dialogues) await lessonBase.collection('dialogues').doc(d.id).delete();
+    for (const p of patterns)  await lessonBase.collection('patterns').doc(p.id).delete();
+    await lessonBase.delete();
   }
 
   // ── Words ─────────────────────────────────────────────────────────
@@ -91,6 +96,56 @@ const DB = (() => {
     await langRef(lang).collection('levels').doc(levelId)
       .collection('lessons').doc(lessonId)
       .collection('words').doc(wordId).delete();
+  }
+
+  // ── Dialogues ─────────────────────────────────────────────────────
+  // Each dialogue doc: { title, order, lines: [{speaker, text, zh, phonetic, order}] }
+
+  function lessonRef(lang, levelId, lessonId) {
+    return langRef(lang).collection('levels').doc(levelId).collection('lessons').doc(lessonId);
+  }
+
+  async function getDialogues(lang, levelId, lessonId) {
+    const snap = await lessonRef(lang, levelId, lessonId).collection('dialogues').orderBy('order').get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  }
+
+  async function addDialogue(lang, levelId, lessonId, data) {
+    const existing = await getDialogues(lang, levelId, lessonId);
+    const order = existing.length ? Math.max(...existing.map(d => d.order)) + 1 : 1;
+    const ref = await lessonRef(lang, levelId, lessonId).collection('dialogues').add({ ...data, order });
+    return ref.id;
+  }
+
+  async function updateDialogue(lang, levelId, lessonId, dialogueId, data) {
+    await lessonRef(lang, levelId, lessonId).collection('dialogues').doc(dialogueId).update(data);
+  }
+
+  async function deleteDialogue(lang, levelId, lessonId, dialogueId) {
+    await lessonRef(lang, levelId, lessonId).collection('dialogues').doc(dialogueId).delete();
+  }
+
+  // ── Patterns ──────────────────────────────────────────────────────
+  // Each pattern doc: { pattern, explanation, notes, order, examples: [{text, zh}], slots: [{word, zh}] }
+
+  async function getPatterns(lang, levelId, lessonId) {
+    const snap = await lessonRef(lang, levelId, lessonId).collection('patterns').orderBy('order').get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  }
+
+  async function addPattern(lang, levelId, lessonId, data) {
+    const existing = await getPatterns(lang, levelId, lessonId);
+    const order = existing.length ? Math.max(...existing.map(p => p.order)) + 1 : 1;
+    const ref = await lessonRef(lang, levelId, lessonId).collection('patterns').add({ ...data, order });
+    return ref.id;
+  }
+
+  async function updatePattern(lang, levelId, lessonId, patternId, data) {
+    await lessonRef(lang, levelId, lessonId).collection('patterns').doc(patternId).update(data);
+  }
+
+  async function deletePattern(lang, levelId, lessonId, patternId) {
+    await lessonRef(lang, levelId, lessonId).collection('patterns').doc(patternId).delete();
   }
 
   // ── Progress ──────────────────────────────────────────────────────
@@ -141,6 +196,8 @@ const DB = (() => {
     getLevels, addLevel, updateLevel, deleteLevel,
     getLessons, addLesson, updateLesson, deleteLesson,
     getWords, addWord, updateWord, deleteWord,
+    getDialogues, addDialogue, updateDialogue, deleteDialogue,
+    getPatterns, addPattern, updatePattern, deletePattern,
     getProgress, getAllProgress, updateProgress, saveSessionResults
   };
 })();

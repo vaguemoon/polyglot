@@ -164,6 +164,67 @@
 
     .loading-msg { color: var(--muted); padding: 28px; text-align: center; font-size: 0.9rem; }
     .error-msg   { color: var(--red);   padding: 20px; text-align: center; font-size: 0.88rem; }
+
+    /* ── Modes page sections ──────────────────────── */
+    .modes-section-hdr {
+      display: flex; align-items: center; gap: 10px;
+      margin: 18px 0 10px;
+    }
+    .modes-section-hdr:first-child { margin-top: 4px; }
+    .modes-section-title { font-size: 0.75rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; white-space: nowrap; }
+    .modes-section-hr    { flex: 1; height: 1px; background: var(--border); }
+    .modes-section-badge { font-size: 0.75rem; color: var(--muted); }
+
+    /* ── Dialogue read card ───────────────────────── */
+    .dial-read-card {
+      background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-lg);
+      padding: 36px 24px; text-align: center; min-height: 220px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+      cursor: pointer; user-select: none;
+    }
+    .dial-speaker  { font-size: 0.72rem; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 0.08em; }
+    .dial-zh-large { font-size: 1.8rem; font-weight: 700; line-height: 1.3; }
+    .dial-text     { font-size: 2rem; font-weight: 800; color: var(--primary); line-height: 1.3; }
+    .dial-phonetic { font-size: 0.9rem; color: var(--muted); }
+    .dial-meta     { font-size: 0.78rem; color: var(--muted); text-align: center; margin-bottom: 10px; }
+
+    /* ── Tile ordering (shared for dial-order, pat-order) ── */
+    .order-placed {
+      min-height: 60px; background: var(--bg); border: 2px solid var(--border);
+      border-radius: var(--radius-sm); padding: 8px; margin-bottom: 12px;
+      display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start;
+      transition: border-color 0.15s;
+    }
+    .order-placed:has(.order-tile) { border-color: var(--primary); }
+    .order-available { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 14px; }
+    .order-tile {
+      background: var(--surface); border: 2px solid var(--border); border-radius: 8px;
+      padding: 8px 14px; font-size: 0.88rem; font-weight: 600; cursor: pointer;
+      transition: border-color 0.12s, background 0.12s, transform 0.1s;
+      user-select: none; text-align: left; line-height: 1.5;
+    }
+    .order-tile:hover  { border-color: var(--primary); background: var(--primary-lt); }
+    .order-tile:active { transform: scale(0.96); }
+
+    /* ── Cloze display ────────────────────────────── */
+    .cloze-card {
+      background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow);
+      padding: 22px 20px; margin-bottom: 18px; text-align: center;
+    }
+    .cloze-speaker { font-size: 0.72rem; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 6px; }
+    .cloze-text    { font-size: 1.5rem; font-weight: 700; line-height: 1.5; margin-bottom: 6px; }
+    .cloze-blank   { display: inline-block; min-width: 64px; border-bottom: 3px solid var(--primary); margin: 0 4px; }
+    .cloze-zh      { font-size: 0.85rem; color: var(--muted); }
+
+    /* ── Pattern fill display ─────────────────────── */
+    .pat-frame-card {
+      background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow);
+      padding: 20px; margin-bottom: 18px; text-align: center;
+    }
+    .pat-frame-text { font-size: 1.4rem; font-weight: 800; color: var(--primary); margin-bottom: 6px; }
+    .pat-frame-expl { font-size: 0.82rem; color: var(--muted); }
+    .pat-sentence   { font-size: 1.3rem; font-weight: 700; margin-top: 12px; line-height: 1.5; }
+    .pat-blank      { display: inline-block; min-width: 70px; border-bottom: 3px solid var(--primary); margin: 0 3px; }
   </style>
 </head>
 <body>
@@ -208,33 +269,99 @@
     <div class="topbar">
       <button class="topbar-back" onclick="navToLessons()">←</button>
       <span class="topbar-title" id="modes-lesson-title"></span>
-      <span class="topbar-badge" id="modes-word-count"></span>
     </div>
     <div class="page-content">
-      <div style="text-align:center; padding: 8px 0 20px">
-        <div style="font-size:0.88rem; color:var(--muted)">選擇學習模式</div>
+
+      <!-- 詞彙 section -->
+      <div id="modes-word-section" style="display:none">
+        <div class="modes-section-hdr">
+          <span class="modes-section-title">詞彙練習</span>
+          <div class="modes-section-hr"></div>
+          <span class="modes-section-badge" id="modes-word-count"></span>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:10px">
+          <button class="mode-card" onclick="startMode('flashcard')">
+            <div class="mode-icon">🃏</div>
+            <div><div class="mode-name">單字卡片</div><div class="mode-desc">翻面記憶，評估熟悉程度</div></div>
+          </button>
+          <button class="mode-card" id="mode-btn-listen" onclick="startMode('listening')">
+            <div class="mode-icon">👂</div>
+            <div><div class="mode-name">聽力練習</div><div class="mode-desc">聽發音，選出對應詞彙</div></div>
+          </button>
+          <button class="mode-card" id="mode-btn-quiz" onclick="startMode('quiz')">
+            <div class="mode-icon">📝</div>
+            <div><div class="mode-name">詞彙測驗</div><div class="mode-desc">看中文，選出正確翻譯</div></div>
+          </button>
+          <button class="mode-card" onclick="startMode('spelling')">
+            <div class="mode-icon">✏️</div>
+            <div><div class="mode-name">拼寫練習</div><div class="mode-desc">看中文，輸入或拼出詞彙</div></div>
+          </button>
+        </div>
+        <div id="mcq-min-notice" style="display:none; color:var(--muted); font-size:0.8rem; text-align:center; margin-top:10px; padding:10px; background:var(--bg); border-radius:var(--radius-sm)">
+          ⚠️ 聽力和測驗模式需要至少 4 個詞彙
+        </div>
       </div>
-      <div style="display:flex; flex-direction:column; gap:14px">
-        <button class="mode-card" onclick="startMode('flashcard')">
-          <div class="mode-icon">🃏</div>
-          <div><div class="mode-name">單字卡片</div><div class="mode-desc">翻面記憶，評估熟悉程度</div></div>
-        </button>
-        <button class="mode-card" id="mode-btn-listen" onclick="startMode('listening')">
-          <div class="mode-icon">👂</div>
-          <div><div class="mode-name">聽力練習</div><div class="mode-desc">聽發音，選出對應詞彙</div></div>
-        </button>
-        <button class="mode-card" id="mode-btn-quiz" onclick="startMode('quiz')">
-          <div class="mode-icon">📝</div>
-          <div><div class="mode-name">詞彙測驗</div><div class="mode-desc">看中文，選出正確翻譯</div></div>
-        </button>
-        <button class="mode-card" onclick="startMode('spelling')">
-          <div class="mode-icon">✏️</div>
-          <div><div class="mode-name">拼寫練習</div><div class="mode-desc">看中文，輸入或拼出詞彙</div></div>
-        </button>
+
+      <!-- 對話 section -->
+      <div id="modes-dial-section" style="display:none">
+        <div class="modes-section-hdr">
+          <span class="modes-section-title">對話練習</span>
+          <div class="modes-section-hr"></div>
+          <span class="modes-section-badge" id="modes-dial-count"></span>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:10px">
+          <button class="mode-card" onclick="startDialogueMode('dial-read')">
+            <div class="mode-icon">📖</div>
+            <div><div class="mode-name">逐行閱讀</div><div class="mode-desc">一行一行翻開，評估記憶</div></div>
+          </button>
+          <button class="mode-card" id="mode-btn-dial-fill" onclick="startDialogueMode('dial-fill')">
+            <div class="mode-icon">👂</div>
+            <div><div class="mode-name">聆聽填空</div><div class="mode-desc">聽發音，選出對應翻譯</div></div>
+          </button>
+          <button class="mode-card" onclick="startDialogueMode('dial-order')">
+            <div class="mode-icon">🔀</div>
+            <div><div class="mode-name">排序對話</div><div class="mode-desc">將台詞排回正確順序</div></div>
+          </button>
+          <button class="mode-card" id="mode-btn-dial-cloze" onclick="startDialogueMode('dial-cloze')">
+            <div class="mode-icon">✏️</div>
+            <div><div class="mode-name">克漏字</div><div class="mode-desc">從選項填入缺少的詞</div></div>
+          </button>
+        </div>
+        <div id="dial-min-notice" style="display:none; color:var(--muted); font-size:0.8rem; text-align:center; margin-top:10px; padding:10px; background:var(--bg); border-radius:var(--radius-sm)">
+          ⚠️ 聆聽填空與克漏字需要至少 4 行台詞
+        </div>
       </div>
-      <div id="mcq-min-notice" style="display:none; color:var(--muted); font-size:0.8rem; text-align:center; margin-top:14px; padding:10px; background:var(--bg); border-radius:var(--radius-sm)">
-        ⚠️ 聽力和測驗模式需要至少 4 個詞彙
+
+      <!-- 句型 section -->
+      <div id="modes-pat-section" style="display:none">
+        <div class="modes-section-hdr">
+          <span class="modes-section-title">句型練習</span>
+          <div class="modes-section-hr"></div>
+          <span class="modes-section-badge" id="modes-pat-count"></span>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:10px">
+          <button class="mode-card" onclick="startPatternMode('pat-fc')">
+            <div class="mode-icon">🃏</div>
+            <div><div class="mode-name">例句閃卡</div><div class="mode-desc">翻面記憶例句，評估熟悉度</div></div>
+          </button>
+          <button class="mode-card" id="mode-btn-pat-fill" onclick="startPatternMode('pat-fill')">
+            <div class="mode-icon">🧩</div>
+            <div><div class="mode-name">替換填空</div><div class="mode-desc">看句型框架，選詞填入空格</div></div>
+          </button>
+          <button class="mode-card" id="mode-btn-pat-zh2f" onclick="startPatternMode('pat-zh2f')">
+            <div class="mode-icon">📝</div>
+            <div><div class="mode-name">中翻外文</div><div class="mode-desc">看中文，選出正確例句</div></div>
+          </button>
+          <button class="mode-card" onclick="startPatternMode('pat-order')">
+            <div class="mode-icon">🔤</div>
+            <div><div class="mode-name">造句排列</div><div class="mode-desc">拼排詞語，組成正確句子</div></div>
+          </button>
+        </div>
+        <div id="pat-min-notice" style="display:none; color:var(--muted); font-size:0.8rem; text-align:center; margin-top:10px; padding:10px; background:var(--bg); border-radius:var(--radius-sm)">
+          ⚠️ 替換填空需要至少 2 個詞槽，中翻外文需要至少 4 個例句
+        </div>
       </div>
+
     </div>
   </div>
 
@@ -368,6 +495,209 @@
         <button class="btn btn-ghost   btn-lg" onclick="navToModes()">換其他模式</button>
         <button class="btn btn-ghost   btn-lg" onclick="navToLessons()">返回課程</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ── Page: Dialogue Read ──────────────────────────────────────── -->
+  <div class="page" id="pg-dial-read">
+    <div class="topbar">
+      <button class="topbar-back" onclick="exitMode()">✕</button>
+      <span class="topbar-title" id="dr-lesson-title"></span>
+      <span class="topbar-badge" id="dr-badge"></span>
+    </div>
+    <div class="study-hdr">
+      <div class="study-hdr-meta">
+        <span id="dr-card-label"></span>
+        <span id="dr-score-label"></span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="dr-fill" style="width:0%"></div></div>
+    </div>
+    <div class="page-content">
+      <div class="dial-meta" id="dr-meta"></div>
+      <div class="dial-read-card" id="dr-card" onclick="dialReadFlip()">
+        <div class="fc-hint"   id="dr-hint">點擊看台詞</div>
+        <div class="dial-zh-large" id="dr-zh"></div>
+        <div class="dial-speaker"  id="dr-speaker"  style="display:none"></div>
+        <div class="dial-text"     id="dr-text"     style="display:none"></div>
+        <div class="dial-phonetic" id="dr-phonetic" style="display:none"></div>
+        <button class="tts-round"  id="dr-tts"      style="display:none"
+                onclick="event.stopPropagation(); drPlayTTS()">🔊</button>
+      </div>
+      <div class="answer-row" id="dr-answer-row" style="display:none">
+        <button class="btn btn-wrong"   onclick="dialReadMark(false)">✗ 沒記住</button>
+        <button class="btn btn-correct" onclick="dialReadMark(true)">✓ 記住了</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Page: Dialogue Fill (Listening) ──────────────────────────── -->
+  <div class="page" id="pg-dial-fill">
+    <div class="topbar">
+      <button class="topbar-back" onclick="exitMode()">✕</button>
+      <span class="topbar-title" id="df-lesson-title"></span>
+      <span class="topbar-badge" id="df-badge"></span>
+    </div>
+    <div class="study-hdr">
+      <div class="study-hdr-meta">
+        <span id="df-card-label"></span>
+        <span id="df-score-label"></span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="df-fill" style="width:0%"></div></div>
+    </div>
+    <div class="page-content">
+      <div class="mcq-prompt">
+        <button class="tts-big-btn" onclick="dfPlayTTS()">🔊</button>
+        <div class="mcq-hint">點擊播放，選出對應的中文翻譯</div>
+      </div>
+      <div class="mcq-choices" id="df-choices"></div>
+    </div>
+  </div>
+
+  <!-- ── Page: Dialogue Order ──────────────────────────────────────── -->
+  <div class="page" id="pg-dial-order">
+    <div class="topbar">
+      <button class="topbar-back" onclick="exitMode()">✕</button>
+      <span class="topbar-title" id="do-lesson-title"></span>
+      <span class="topbar-badge" id="do-badge"></span>
+    </div>
+    <div class="study-hdr">
+      <div class="study-hdr-meta">
+        <span id="do-card-label"></span>
+        <span id="do-score-label"></span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="do-fill" style="width:0%"></div></div>
+    </div>
+    <div class="page-content">
+      <div class="dial-meta" id="do-meta"></div>
+      <div class="order-placed"    id="do-placed"></div>
+      <div class="order-available" id="do-available"></div>
+      <div style="display:flex; gap:10px; margin-top:4px">
+        <button class="btn btn-ghost btn-sm" onclick="doUndo()">撤銷</button>
+        <button class="btn btn-primary" style="flex:1" onclick="doConfirm()">確認順序</button>
+      </div>
+      <div id="do-feedback" style="display:none" class="spell-feedback"></div>
+    </div>
+  </div>
+
+  <!-- ── Page: Dialogue Cloze ──────────────────────────────────────── -->
+  <div class="page" id="pg-dial-cloze">
+    <div class="topbar">
+      <button class="topbar-back" onclick="exitMode()">✕</button>
+      <span class="topbar-title" id="dc-lesson-title"></span>
+      <span class="topbar-badge" id="dc-badge"></span>
+    </div>
+    <div class="study-hdr">
+      <div class="study-hdr-meta">
+        <span id="dc-card-label"></span>
+        <span id="dc-score-label"></span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="dc-fill" style="width:0%"></div></div>
+    </div>
+    <div class="page-content">
+      <div class="cloze-card" id="dc-card"></div>
+      <div class="mcq-choices" id="dc-choices"></div>
+    </div>
+  </div>
+
+  <!-- ── Page: Pattern Flashcard ───────────────────────────────────── -->
+  <div class="page" id="pg-pat-fc">
+    <div class="topbar">
+      <button class="topbar-back" onclick="exitMode()">✕</button>
+      <span class="topbar-title" id="pf-lesson-title"></span>
+      <span class="topbar-badge" id="pf-badge"></span>
+    </div>
+    <div class="study-hdr">
+      <div class="study-hdr-meta">
+        <span id="pf-card-label"></span>
+        <span id="pf-score-label"></span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="pf-fill" style="width:0%"></div></div>
+    </div>
+    <div class="page-content">
+      <div class="flashcard" id="pf-card" onclick="patFcFlip()">
+        <div class="fc-hint"     id="pf-hint">點擊看例句</div>
+        <div class="fc-zh"       id="pf-zh"></div>
+        <div class="fc-word"     id="pf-text"     style="display:none"></div>
+        <div class="fc-phonetic" id="pf-pattern"  style="display:none"></div>
+        <button class="tts-round" id="pf-tts"     style="display:none"
+                onclick="event.stopPropagation(); pfPlayTTS()">🔊</button>
+      </div>
+      <div class="answer-row" id="pf-answer-row" style="display:none">
+        <button class="btn btn-wrong"   onclick="patFcMark(false)">✗ 不會</button>
+        <button class="btn btn-correct" onclick="patFcMark(true)">✓ 會了</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Page: Pattern Fill ────────────────────────────────────────── -->
+  <div class="page" id="pg-pat-fill">
+    <div class="topbar">
+      <button class="topbar-back" onclick="exitMode()">✕</button>
+      <span class="topbar-title" id="pfill-lesson-title"></span>
+      <span class="topbar-badge" id="pfill-badge"></span>
+    </div>
+    <div class="study-hdr">
+      <div class="study-hdr-meta">
+        <span id="pfill-card-label"></span>
+        <span id="pfill-score-label"></span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="pfill-fill" style="width:0%"></div></div>
+    </div>
+    <div class="page-content">
+      <div class="pat-frame-card" id="pfill-frame"></div>
+      <div class="mcq-choices" id="pfill-choices"></div>
+    </div>
+  </div>
+
+  <!-- ── Page: Pattern Chinese to Foreign ─────────────────────────── -->
+  <div class="page" id="pg-pat-zh2f">
+    <div class="topbar">
+      <button class="topbar-back" onclick="exitMode()">✕</button>
+      <span class="topbar-title" id="pz-lesson-title"></span>
+      <span class="topbar-badge" id="pz-badge"></span>
+    </div>
+    <div class="study-hdr">
+      <div class="study-hdr-meta">
+        <span id="pz-card-label"></span>
+        <span id="pz-score-label"></span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="pz-fill" style="width:0%"></div></div>
+    </div>
+    <div class="page-content">
+      <div class="mcq-prompt">
+        <div class="mcq-zh-text" id="pz-zh"></div>
+        <div class="mcq-hint">選出正確的外文例句</div>
+      </div>
+      <div class="mcq-choices" id="pz-choices"></div>
+    </div>
+  </div>
+
+  <!-- ── Page: Pattern Word Order ──────────────────────────────────── -->
+  <div class="page" id="pg-pat-order">
+    <div class="topbar">
+      <button class="topbar-back" onclick="exitMode()">✕</button>
+      <span class="topbar-title" id="po-lesson-title"></span>
+      <span class="topbar-badge" id="po-badge"></span>
+    </div>
+    <div class="study-hdr">
+      <div class="study-hdr-meta">
+        <span id="po-card-label"></span>
+        <span id="po-score-label"></span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="po-fill" style="width:0%"></div></div>
+    </div>
+    <div class="page-content">
+      <div class="spell-prompt">
+        <div class="spell-zh"  id="po-zh"></div>
+        <div class="spell-sub">請排出正確的句子順序</div>
+      </div>
+      <div class="order-placed"    id="po-placed"></div>
+      <div class="order-available" id="po-available"></div>
+      <div style="display:flex; gap:10px; margin-top:4px">
+        <button class="btn btn-ghost btn-sm" onclick="poUndo()">撤銷</button>
+        <button class="btn btn-primary" style="flex:1" onclick="poConfirm()">確認</button>
+      </div>
+      <div id="po-feedback" style="display:none" class="spell-feedback"></div>
     </div>
   </div>
 
