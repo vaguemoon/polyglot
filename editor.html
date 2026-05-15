@@ -140,6 +140,18 @@
       align-items: center; margin-top: 16px;
     }
     .img-modal-actions .spacer { flex: 1; }
+
+    /* ── Pattern form dynamic rows ─────────── */
+    .pat-row { display:flex; gap:6px; align-items:center; margin-bottom:6px; }
+    .pat-row .form-input { flex:1; }
+    .pat-row .form-input.zh-input { flex:0.6; }
+    .pat-row-remove {
+      background:none; border:none; cursor:pointer;
+      color:var(--muted); font-size:1rem; padding:4px 6px;
+      border-radius:6px; flex-shrink:0;
+      transition: color 0.15s, background 0.15s;
+    }
+    .pat-row-remove:hover { color:var(--red); background:#fef2f2; }
   </style>
 </head>
 <body>
@@ -275,12 +287,15 @@
       <div id="tab-content-patterns" style="display:none">
         <div class="words-toolbar">
           <span class="words-count" id="patterns-count"></span>
-          <button class="btn btn-primary btn-sm" onclick="openPatternBatch()">批次貼入句型</button>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center">
+            <button class="btn btn-ghost btn-sm" onclick="openPatternBatch()">批次貼入</button>
+            <button class="btn btn-primary btn-sm" onclick="openPatternForm()">+ 新增句型</button>
+          </div>
         </div>
         <div id="patterns-list"></div>
         <div class="empty-state" id="patterns-empty" style="display:none">
           <div class="empty-icon">📐</div>
-          <p>還沒有句型<br>點擊「批次貼入句型」開始</p>
+          <p>還沒有句型<br>點擊「+ 新增句型」開始</p>
         </div>
       </div>
 
@@ -379,16 +394,50 @@
       <h3>批次貼入句型</h3>
       <textarea class="batch-textarea" id="batch-pat-textarea" placeholder="# ～은/는 ～이에요&#10;說明: 「～是～」，用於介紹或描述&#10;例句: 저는 학생이에요. | 我是學生。&#10;例句: 이것은 책이에요. | 這是書。&#10;詞槽: 학생 | 學生&#10;詞槽: 선생님 | 老師&#10;備註: 이에요/예요 取決於前面音節的收尾音&#10;&#10;# ～을/를 좋아해요&#10;說明: 「喜歡～」&#10;例句: 저는 음악을 좋아해요. | 我喜歡音樂。&#10;詞槽: 음악 | 音樂&#10;詞槽: 영화 | 電影"></textarea>
       <div class="batch-hint">
-        用 <strong>#</strong> 開頭行作為句型框架名稱，接著可填：<br>
-        <strong>說明:</strong> 中文說明 &nbsp;|&nbsp;
-        <strong>例句:</strong> 原文 | 中文 &nbsp;|&nbsp;
-        <strong>詞槽:</strong> 詞彙 | 中文 &nbsp;|&nbsp;
-        <strong>備註:</strong> 補充（選填）<br>
-        空行分隔不同句型
+        <strong>格式說明：</strong><br>
+        · 用 <strong>#</strong> 開頭行作為句型框架名稱，例如：<code style="background:var(--bg);padding:1px 5px;border-radius:4px"># ～은/는 ～이에요</code><br>
+        · <strong>說明:</strong> 中文說明（每個句型一行）<br>
+        · <strong>例句:</strong> 外文例句 | 中文翻譯（可多行）<br>
+        · <strong>詞槽:</strong> 詞彙 | 中文（可多行）<br>
+        · <strong>備註:</strong> 補充說明（選填）<br>
+        · 空行分隔不同句型
       </div>
       <div class="modal-actions">
         <button class="btn btn-ghost" onclick="closeModal('batch-pat-modal')">取消</button>
         <button class="btn btn-primary" onclick="importPatternBatch()">匯入</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal: Pattern Form (Add / Edit) ────────────────────────────── -->
+  <div class="modal-overlay" id="pat-form-modal">
+    <div class="modal" style="max-width:560px">
+      <h3 id="pat-form-title">新增句型</h3>
+      <div class="form-field">
+        <label class="form-label">句型框架</label>
+        <input class="form-input" id="pf-pattern" type="text" placeholder="例如：～은/는 ～이에요">
+      </div>
+      <div class="form-field">
+        <label class="form-label">說明（中文）</label>
+        <input class="form-input" id="pf-explanation" type="text" placeholder="例如：「～是～」，用於介紹或描述">
+      </div>
+      <div class="form-field">
+        <label class="form-label">例句</label>
+        <div id="pf-examples-list"></div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:6px" type="button" onclick="addExampleRow()">＋ 新增例句</button>
+      </div>
+      <div class="form-field">
+        <label class="form-label">詞槽</label>
+        <div id="pf-slots-list"></div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:6px" type="button" onclick="addSlotRow()">＋ 新增詞槽</button>
+      </div>
+      <div class="form-field">
+        <label class="form-label">備註（選填）</label>
+        <input class="form-input" id="pf-notes" type="text" placeholder="例如：이에요/예요 取決於前面音節的收尾音">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeModal('pat-form-modal')">取消</button>
+        <button class="btn btn-primary" onclick="savePatternForm()">儲存</button>
       </div>
     </div>
   </div>

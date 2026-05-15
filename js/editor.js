@@ -3,6 +3,7 @@ let lang = 'ko';
 let curLevelId = null, curLevelName = '';
 let curLessonId = null, curLessonName = '';
 let editingId = null;
+let editingPatternId = null;
 let wordsCache = [];
 
 // Image modal state
@@ -38,12 +39,13 @@ function openModal(id) {
 function closeModal(id) {
   document.getElementById(id).classList.remove('open');
   editingId = null;
+  if (id === 'pat-form-modal') editingPatternId = null;
 }
 
 // Close on backdrop click
 document.querySelectorAll('.modal-overlay').forEach(el => {
   el.addEventListener('click', e => {
-    if (e.target === el) el.classList.remove('open');
+    if (e.target === el) closeModal(el.id);
   });
 });
 
@@ -53,9 +55,10 @@ document.addEventListener('keydown', e => {
   if (!open) return;
   if (e.key === 'Escape') { open.classList.remove('open'); editingId = null; return; }
   if (e.key !== 'Enter' || open.id === 'confirm-modal') return;
-  if (open.id === 'level-modal')        saveLevel();
-  else if (open.id === 'lesson-modal')  saveLesson();
-  else if (open.id === 'batch-modal')   importBatchPaste();
+  if (open.id === 'level-modal')          saveLevel();
+  else if (open.id === 'lesson-modal')    saveLesson();
+  else if (open.id === 'batch-modal')     importBatchPaste();
+  else if (open.id === 'pat-form-modal')  savePatternForm();
 });
 
 // ── Language selection ───────────────────────────────────────────────────────
@@ -826,6 +829,7 @@ function renderPatternList() {
       <div class="pat-card-head">
         <div class="pat-card-framework"></div>
         <span class="pat-card-meta">${examples.length} 例句 · ${slots.length} 詞槽</span>
+        <button class="btn btn-ghost btn-icon btn-sm" title="編輯">✎</button>
         <button class="btn btn-danger btn-icon btn-sm" title="刪除">🗑</button>
       </div>
       ${pat.explanation ? `<div class="pat-card-explanation"></div>` : ''}
@@ -834,6 +838,7 @@ function renderPatternList() {
 
     card.querySelector('.pat-card-framework').textContent = pat.pattern || '（未命名句型）';
     if (pat.explanation) card.querySelector('.pat-card-explanation').textContent = pat.explanation;
+    card.querySelector('[title="編輯"]').addEventListener('click', () => openPatternForm(pat));
     card.querySelector('[title="刪除"]').addEventListener('click', () => confirmDeletePattern(pat.id, pat.pattern));
     list.appendChild(card);
   });
@@ -853,7 +858,6 @@ function confirmDeletePattern(id, name) {
 }
 
 function openPatternBatch() {
-  document.getElementById('batch-pat-textarea').value = '';
   openModal('batch-pat-modal');
   setTimeout(() => document.getElementById('batch-pat-textarea').focus(), 150);
 }
@@ -872,8 +876,9 @@ async function importPatternBatch() {
     } catch { /* skip */ }
   }
 
-  closeModal('batch-pat-modal');
   if (added) {
+    document.getElementById('batch-pat-textarea').value = '';
+    closeModal('batch-pat-modal');
     toast(`已匯入 ${added} 個句型`);
     loadPatterns();
   } else {
@@ -924,4 +929,88 @@ function parsePatternBatch(raw) {
 
   flush();
   return patterns;
+}
+
+// ── Pattern form (add / edit) ─────────────────────────────────────────────────
+
+function makePatRow(type, text = '', zh = '') {
+  const div = document.createElement('div');
+  div.className = 'pat-row';
+  const ph1 = type === 'example' ? '外文例句' : '詞彙';
+  const ph2 = type === 'example' ? '中文翻譯' : '中文';
+  div.innerHTML = `
+    <input class="form-input" type="text" data-role="text" placeholder="${ph1}">
+    <input class="form-input zh-input" type="text" data-role="zh" placeholder="${ph2}">
+    <button class="pat-row-remove" type="button" title="移除">✕</button>
+  `;
+  div.querySelector('[data-role="text"]').value = text;
+  div.querySelector('[data-role="zh"]').value = zh;
+  div.querySelector('.pat-row-remove').addEventListener('click', () => div.remove());
+  return div;
+}
+
+function addExampleRow(text = '', zh = '') {
+  document.getElementById('pf-examples-list').appendChild(makePatRow('example', text, zh));
+}
+
+function addSlotRow(word = '', zh = '') {
+  document.getElementById('pf-slots-list').appendChild(makePatRow('slot', word, zh));
+}
+
+function openPatternForm(pat = null) {
+  editingPatternId = pat ? pat.id : null;
+  document.getElementById('pat-form-title').textContent = pat ? '編輯句型' : '新增句型';
+  document.getElementById('pf-pattern').value     = pat?.pattern     || '';
+  document.getElementById('pf-explanation').value = pat?.explanation || '';
+  document.getElementById('pf-notes').value       = pat?.notes       || '';
+
+  document.getElementById('pf-examples-list').innerHTML = '';
+  document.getElementById('pf-slots-list').innerHTML    = '';
+
+  const examples = pat?.examples || [];
+  const slots    = pat?.slots    || [];
+  if (examples.length) examples.forEach(ex => addExampleRow(ex.text, ex.zh));
+  else addExampleRow();
+  if (slots.length) slots.forEach(s => addSlotRow(s.word, s.zh));
+  else addSlotRow();
+
+  openModal('pat-form-modal');
+  setTimeout(() => document.getElementById('pf-pattern').focus(), 150);
+}
+
+async function savePatternForm() {
+  const pattern     = document.getElementById('pf-pattern').value.trim();
+  const explanation = document.getElementById('pf-explanation').value.trim();
+  const notes       = document.getElementById('pf-notes').value.trim();
+  if (!pattern) { toast('請填入句型框架名稱', true); return; }
+
+  const examples = [];
+  document.querySelectorAll('#pf-examples-list .pat-row').forEach(row => {
+    const text = row.querySelector('[data-role="text"]').value.trim();
+    const zh   = row.querySelector('[data-role="zh"]').value.trim();
+    if (text) examples.push({ text, zh });
+  });
+
+  const slots = [];
+  document.querySelectorAll('#pf-slots-list .pat-row').forEach(row => {
+    const word = row.querySelector('[data-role="text"]').value.trim();
+    const zh   = row.querySelector('[data-role="zh"]').value.trim();
+    if (word) slots.push({ word, zh });
+  });
+
+  const payload = { pattern, explanation, notes, examples, slots };
+
+  try {
+    if (editingPatternId) {
+      await DB.updatePattern(lang, curLevelId, curLessonId, editingPatternId, payload);
+      toast('已更新');
+    } else {
+      await DB.addPattern(lang, curLevelId, curLessonId, payload);
+      toast('已新增');
+    }
+    closeModal('pat-form-modal');
+    loadPatterns();
+  } catch (e) {
+    toast('儲存失敗：' + e.message, true);
+  }
 }

@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>韓文練習 — Polyglot</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic+Coding:wght@400;700&family=Noto+Sans+TC:wght@400;500;700;800&family=Noto+Sans+KR:wght@400;500;700&family=Noto+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/main.css">
+  <style>
+    /* ── Mode home ──────────────────────────────────── */
+    .mode-cards { display: flex; flex-direction: column; gap: 14px; padding: 8px 0; }
+    .mode-card {
+      display: flex; align-items: center; gap: 16px; padding: 20px;
+      background: var(--surface); border: 1.5px solid var(--border);
+      border-radius: var(--radius); cursor: pointer; text-align: left;
+      width: 100%; font-family: inherit;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .mode-card:hover { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+    .mode-icon { font-size: 2rem; line-height: 1; flex-shrink: 0; }
+    .mode-info { flex: 1; }
+    .mode-title { font-size: 1rem; font-weight: 700; color: var(--text); }
+    .mode-desc { font-size: 0.82rem; color: var(--muted); margin-top: 3px; }
+    .mode-arrow { color: var(--muted); font-size: 1.2rem; }
+
+    /* ── Prepare page ───────────────────────────────── */
+    .prepare-body { display: flex; flex-direction: column; gap: 24px; padding: 8px 0; }
+    .typing-select {
+      width: 100%; padding: 12px 14px; font-family: inherit;
+      font-size: 0.95rem; border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm); background: var(--surface);
+      color: var(--text); outline: none; cursor: pointer; transition: border-color 0.15s;
+    }
+    .typing-select:focus { border-color: var(--primary); }
+    .prepare-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .prepare-actions .btn { flex: 1; min-width: 120px; justify-content: center; }
+
+    /* ── Course list ────────────────────────────────── */
+    .course-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+    .course-card {
+      display: flex; align-items: center; gap: 14px; padding: 13px 16px;
+      border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+      background: var(--surface); cursor: pointer; transition: border-color 0.15s;
+    }
+    .course-card:hover { border-color: var(--primary); }
+    .course-card.selected { border-color: var(--primary); background: rgba(99,102,241,0.06); }
+    .course-card-dot {
+      width: 18px; height: 18px; border-radius: 50%;
+      border: 2px solid var(--border); flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .course-card.selected .course-card-dot { border-color: var(--primary); background: var(--primary); }
+    .course-card.selected .course-card-dot::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: white; }
+    .course-card-body { flex: 1; min-width: 0; }
+    .course-card-name { font-size: 0.9rem; font-weight: 700; color: var(--text); }
+    .course-card-keys { font-size: 0.72rem; color: var(--muted); margin-top: 1px; font-family: monospace; letter-spacing: 0.04em; }
+    .course-card-pool { font-size: 1rem; color: var(--text); font-family: 'Noto Sans KR', sans-serif; margin-top: 5px; letter-spacing: 0.08em; }
+    .course-card-count { font-size: 0.72rem; color: var(--muted); flex-shrink: 0; }
+
+    /* ── KB prepare ─────────────────────────────────── */
+    .kb-prepare-section { margin-bottom: 22px; }
+    .kb-prepare-label {
+      font-size: 0.8rem; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px;
+    }
+    .kb-option-group { display: flex; gap: 8px; flex-wrap: wrap; }
+    .kb-option { flex: 1; min-width: 80px; }
+    .kb-option input[type="radio"] { display: none; }
+    .kb-option label {
+      display: block; text-align: center; padding: 10px 16px;
+      border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+      cursor: pointer; font-size: 0.9rem; font-weight: 500;
+      color: var(--text); background: var(--surface);
+      transition: border-color 0.15s, background 0.15s; user-select: none;
+    }
+    .kb-option input:checked + label {
+      border-color: var(--primary); background: rgba(99,102,241,0.08);
+      color: var(--primary); font-weight: 700;
+    }
+    .kb-option label:hover { border-color: var(--primary); }
+    .kb-option-sub { font-size: 0.72rem; color: var(--muted); margin-top: 2px; display: block; }
+
+    /* ── Practice toolbar ───────────────────────────── */
+    .practice-toolbar {
+      display: flex; align-items: center; gap: 16px;
+      padding: 10px 20px; background: var(--surface);
+      border-bottom: 1.5px solid var(--border);
+      position: sticky; top: 0; z-index: 10;
+    }
+    .practice-stat { display: flex; flex-direction: column; align-items: center; min-width: 56px; }
+    .stat-val { font-size: 1.1rem; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; line-height: 1.1; }
+    .stat-lbl { font-size: 0.65rem; color: var(--muted); margin-top: 2px; }
+    .practice-controls { display: flex; gap: 6px; margin-left: auto; align-items: center; }
+    #blind-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+    /* ── Typing display ─────────────────────────────── */
+    .practice-content {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      padding: 28px 20px 20px;
+    }
+    #typing-display {
+      width: 100%; max-width: 640px; height: 132px; overflow: hidden;
+      scroll-behavior: smooth;
+      font-family: 'Nanum Gothic Coding', 'Noto Sans KR', monospace;
+      font-size: 1.2rem; line-height: 44px; letter-spacing: 0.01em;
+      color: var(--muted); background: var(--bg);
+      border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+      padding: 0 20px; box-sizing: border-box; cursor: text;
+      word-break: keep-all; white-space: pre-wrap;
+    }
+    #typing-display:focus-within { border-color: var(--primary); }
+    .syl { display: inline; }
+    .syl-correct { color: var(--primary); }
+    .syl-wrong { color: var(--red); background: rgba(239,68,68,0.12); border-radius: 3px; }
+    .syl-current { background: var(--text); color: var(--surface); border-radius: 3px; }
+    .syl-composing { background: var(--border); color: var(--text); border-radius: 3px; border-bottom: 2px solid var(--primary); }
+    .syl-pending { color: var(--muted); }
+    .syl-blind { color: transparent; user-select: none; }
+    #typing-input { position: fixed; top: -9999px; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+    .practice-hint { margin-top: 10px; font-size: 0.75rem; color: var(--muted); text-align: center; max-width: 640px; }
+    #pg-practice { height: 100%; }
+
+    /* ── Results ────────────────────────────────────── */
+    .results-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+    .result-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-sm); padding: 18px 14px; text-align: center; }
+    .result-val { font-size: 2rem; font-weight: 800; color: var(--primary); line-height: 1.1; font-variant-numeric: tabular-nums; }
+    .result-lbl { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+    .results-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .results-actions .btn { flex: 1; min-width: 120px; justify-content: center; }
+
+    /* ── Manage texts modal ─────────────────────────── */
+    .text-list-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm); margin-bottom: 8px; background: var(--surface);
+    }
+    .text-list-item.current { border-color: var(--primary); }
+    .text-list-info { flex: 1; min-width: 0; }
+    .text-list-name { font-weight: 600; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .text-list-preview { font-size: 0.75rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .text-list-actions { display: flex; gap: 4px; flex-shrink: 0; }
+    .texts-divider { border: none; border-top: 1.5px solid var(--border); margin: 14px 0; }
+
+    /* ── KB practice page ───────────────────────────── */
+    #pg-keyboard { height: 100%; }
+    .kb-toolbar {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 20px; background: var(--surface);
+      border-bottom: 1.5px solid var(--border); position: sticky; top: 0; z-index: 10;
+    }
+    .kb-toolbar-label { font-size: 0.82rem; font-weight: 600; color: var(--muted); }
+    .kb-progress { font-size: 0.9rem; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+    .kb-content {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      padding: 20px 16px 24px; gap: 14px; overflow-y: auto;
+    }
+
+    /* ── Sequence display ───────────────────────────── */
+    .kb-seq-wrap {
+      width: 100%; max-width: 680px; padding: 14px 18px;
+      background: var(--bg); border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm); box-sizing: border-box;
+    }
+    .kb-seq-display { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
+    .kb-syl {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 40px; height: 46px; font-size: 1.55rem; font-weight: 700;
+      font-family: 'Noto Sans KR', sans-serif; border-radius: 5px;
+    }
+    .kb-syl-done    { color: var(--primary); }
+    .kb-syl-current { background: var(--text); color: var(--surface); }
+    .kb-syl-wrong   { color: var(--red); background: rgba(239,68,68,0.12); }
+    .kb-syl-pending { color: var(--muted); }
+
+    /* ── KB lower section (shift hint + keyboard) ───── */
+    .kb-lower {
+      margin-top: auto; width: 100%;
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+    }
+    #kb-shift-indicator {
+      display: inline-block; font-size: 0.82rem; font-weight: 600;
+      color: var(--primary); background: rgba(99,102,241,0.1);
+      border: 1px solid rgba(99,102,241,0.3); border-radius: 4px;
+      padding: 3px 10px; visibility: hidden;
+    }
+    #kb-shift-indicator.visible { visibility: visible; }
+
+    /* ── Virtual keyboard ───────────────────────────── */
+    .vk-wrap { width: 100%; overflow-x: auto; padding: 0 4px; }
+    .vk-keyboard {
+      display: flex; flex-direction: column; gap: 6px;
+      align-items: center; user-select: none; margin: 0 auto; width: max-content;
+    }
+    .vk-row { display: flex; gap: 6px; }
+    .vk-key {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      width: 58px; height: 58px; border: 1.5px solid var(--border);
+      border-radius: 8px; background: var(--surface); cursor: default;
+      position: relative; transition: border-color 0.1s, background 0.1s, box-shadow 0.1s;
+      flex-shrink: 0;
+    }
+    .vk-base { font-size: 1.25rem; font-weight: 700; color: var(--text); line-height: 1; font-family: 'Noto Sans KR', sans-serif; }
+    .vk-shift-label { font-size: 0.65rem; color: var(--muted); position: absolute; top: 4px; left: 5px; font-family: 'Noto Sans KR', sans-serif; line-height: 1; }
+    .vk-eng { font-size: 0.55rem; color: var(--border); position: absolute; bottom: 3px; right: 5px; font-family: monospace; }
+    .vk-shift-key { width: 80px; font-size: 0.75rem; font-weight: 600; color: var(--muted); letter-spacing: 0.02em; }
+    .vk-key.kb-target { border-color: var(--primary); background: rgba(99,102,241,0.1); box-shadow: 0 0 0 2px rgba(99,102,241,0.2); }
+    .vk-key.kb-target .vk-base { color: var(--primary); }
+    .vk-key.kb-hint { border-color: #22c55e; background: rgba(34,197,94,0.1); }
+    .vk-key.kb-hint .vk-base { color: #16a34a; }
+    .vk-key.kb-wrong { animation: kb-flash 0.38s ease forwards; }
+    @keyframes kb-flash {
+      0%   { background: rgba(239,68,68,0.4); border-color: var(--red); }
+      100% { background: var(--surface); border-color: var(--border); }
+    }
+
+    /* ── KB results ─────────────────────────────────── */
+    .kb-results-top { text-align: center; margin-bottom: 20px; }
+    .kb-accuracy-val { font-size: 3.5rem; font-weight: 800; color: var(--primary); line-height: 1; font-variant-numeric: tabular-nums; }
+    .kb-accuracy-lbl { font-size: 0.8rem; color: var(--muted); margin-top: 6px; }
+    .kb-count-summary { font-size: 0.82rem; color: var(--muted); text-align: center; margin-bottom: 20px; }
+    .kb-error-title { font-size: 0.8rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+    .kb-error-list { margin-bottom: 24px; }
+    .kb-error-item {
+      display: flex; align-items: center; gap: 12px; padding: 9px 14px;
+      border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+      background: var(--surface); margin-bottom: 6px;
+    }
+    .kb-error-char { font-size: 1.5rem; font-weight: 800; color: var(--red); font-family: 'Noto Sans KR', sans-serif; line-height: 1; min-width: 32px; text-align: center; }
+    .kb-error-info { flex: 1; }
+    .kb-error-wrong { font-size: 0.85rem; font-weight: 600; color: var(--text); }
+    .kb-error-key { font-size: 0.75rem; color: var(--muted); margin-top: 1px; }
+  </style>
+</head>
+<body>
+
+  <!-- ── Page: Home ────────────────────────────────── -->
+  <div class="page active" id="pg-home">
+    <div class="topbar">
+      <button class="topbar-back" onclick="location.href='index.html'">←</button>
+      <span class="topbar-title">韓文練習</span>
+    </div>
+    <div class="page-content">
+      <div class="mode-cards">
+        <button class="mode-card" onclick="goToDrillPrepare()">
+          <div class="mode-icon">📝</div>
+          <div class="mode-info">
+            <div class="mode-title">打字練習</div>
+            <div class="mode-desc">輸入自訂文章，訓練打字速度與準確率</div>
+          </div>
+          <div class="mode-arrow">›</div>
+        </button>
+        <button class="mode-card" onclick="initKbPrepare()">
+          <div class="mode-icon">⌨️</div>
+          <div class="mode-info">
+            <div class="mode-title">鍵盤練習</div>
+            <div class="mode-desc">認識韓文鍵盤位置，適合初學者</div>
+          </div>
+          <div class="mode-arrow">›</div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Page: Drill Prepare ───────────────────────── -->
+  <div class="page" id="pg-drill-prepare">
+    <div class="topbar">
+      <button class="topbar-back" onclick="showPage('pg-home')">←</button>
+      <span class="topbar-title">打字練習</span>
+    </div>
+    <div class="page-content">
+      <div class="prepare-body">
+        <div>
+          <div class="section-header" style="margin-bottom:10px">
+            <span class="section-title">選擇練習文章</span>
+          </div>
+          <select id="text-select" class="typing-select"></select>
+        </div>
+        <div class="prepare-actions">
+          <button class="btn btn-ghost" onclick="openManageTexts()">管理文章</button>
+          <button class="btn btn-primary" id="start-btn" onclick="startPractice()">開始練習 →</button>
+        </div>
+        <div id="prepare-empty" class="empty-state" style="display:none">
+          <div class="empty-icon">⌨️</div>
+          <p>還沒有文章<br>點擊「管理文章」新增韓文內容</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Page: Practice ───────────────────────────── -->
+  <div class="page" id="pg-practice">
+    <div class="practice-toolbar">
+      <div class="practice-stat">
+        <span class="stat-val" id="timer-display">00:00</span>
+        <span class="stat-lbl">時間</span>
+      </div>
+      <div class="practice-stat">
+        <span class="stat-val" id="wpm-display">0</span>
+        <span class="stat-lbl">WPM</span>
+      </div>
+      <div class="practice-controls">
+        <button class="btn btn-ghost btn-sm" id="blind-btn" onclick="toggleBlindMode()" title="石潛模式：隱藏未打的字">石潛</button>
+        <button class="btn btn-ghost btn-sm" onclick="restartPractice()" title="重新開始">↺ 重練</button>
+        <button class="btn btn-ghost btn-sm" onclick="finishPractice()" title="結束練習">結束</button>
+      </div>
+    </div>
+    <div class="practice-content">
+      <div id="typing-display" onclick="focusInput()"></div>
+      <div class="practice-hint">點擊文字區域開始打字 · Backspace 清除錯誤</div>
+    </div>
+    <textarea id="typing-input"
+      autocomplete="off" autocorrect="off" autocapitalize="off"
+      spellcheck="false" aria-hidden="true"></textarea>
+  </div>
+
+  <!-- ── Page: Drill Results ───────────────────────── -->
+  <div class="page" id="pg-results">
+    <div class="topbar">
+      <button class="topbar-back" onclick="backToPrepare()">←</button>
+      <span class="topbar-title">練習結果</span>
+    </div>
+    <div class="page-content">
+      <div class="results-grid">
+        <div class="result-card">
+          <div class="result-val" id="res-wpm">0</div>
+          <div class="result-lbl">WPM</div>
+        </div>
+        <div class="result-card">
+          <div class="result-val" id="res-accuracy">100%</div>
+          <div class="result-lbl">正確率</div>
+        </div>
+        <div class="result-card">
+          <div class="result-val" id="res-time">00:00</div>
+          <div class="result-lbl">時間</div>
+        </div>
+        <div class="result-card">
+          <div class="result-val" id="res-errors">0</div>
+          <div class="result-lbl">錯誤音節</div>
+        </div>
+      </div>
+      <div class="results-actions">
+        <button class="btn btn-ghost" onclick="backToPrepare()">← 更換文章</button>
+        <button class="btn btn-primary" onclick="restartPractice()">↺ 再練一次</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Page: KB Prepare ─────────────────────────── -->
+  <div class="page" id="pg-kb-prepare">
+    <div class="topbar">
+      <button class="topbar-back" onclick="showPage('pg-home')">←</button>
+      <span class="topbar-title">鍵盤練習</span>
+    </div>
+    <div class="page-content">
+      <div class="kb-prepare-section">
+        <div class="kb-prepare-label">選擇課程</div>
+        <div class="course-list" id="course-list"></div>
+      </div>
+      <div class="kb-prepare-section">
+        <div class="kb-prepare-label">每字重複</div>
+        <div class="kb-option-group">
+          <div class="kb-option">
+            <input type="radio" name="kb-reps" id="kbr-3" value="3" checked>
+            <label for="kbr-3">×3<span class="kb-option-sub">快速暖身</span></label>
+          </div>
+          <div class="kb-option">
+            <input type="radio" name="kb-reps" id="kbr-5" value="5">
+            <label for="kbr-5">×5<span class="kb-option-sub">標準練習</span></label>
+          </div>
+          <div class="kb-option">
+            <input type="radio" name="kb-reps" id="kbr-10" value="10">
+            <label for="kbr-10">×10<span class="kb-option-sub">深度訓練</span></label>
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-primary" style="width:100%" onclick="startKbPractice()">開始練習 →</button>
+    </div>
+  </div>
+
+  <!-- ── Page: Keyboard Practice ─────────────────── -->
+  <div class="page" id="pg-keyboard">
+    <div class="kb-toolbar">
+      <span class="kb-toolbar-label" id="kb-course-label"></span>
+      <span class="kb-progress" id="kb-progress">1 / 27</span>
+      <div style="margin-left:auto">
+        <button class="btn btn-ghost btn-sm" onclick="endKbEarly()">結束</button>
+      </div>
+    </div>
+    <div class="kb-content">
+      <div class="kb-seq-wrap">
+        <div class="kb-seq-display" id="kb-seq-display"></div>
+      </div>
+      <div class="kb-lower">
+        <span id="kb-shift-indicator">⇧ Shift</span>
+        <div class="vk-wrap">
+          <div class="vk-keyboard" id="vk-keyboard"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Page: KB Results ─────────────────────────── -->
+  <div class="page" id="pg-kb-results">
+    <div class="topbar">
+      <button class="topbar-back" onclick="showPage('pg-home')">←</button>
+      <span class="topbar-title">鍵盤練習結果</span>
+    </div>
+    <div class="page-content">
+      <div class="kb-results-top">
+        <div class="kb-accuracy-val" id="kb-res-accuracy">0%</div>
+        <div class="kb-accuracy-lbl">首次正確率</div>
+      </div>
+      <div class="kb-count-summary" id="kb-count-summary"></div>
+      <div class="kb-error-title">錯誤最多的字母</div>
+      <div class="kb-error-list" id="kb-error-list"></div>
+      <div class="results-actions">
+        <button class="btn btn-ghost" onclick="initKbPrepare()">← 重新設定</button>
+        <button class="btn btn-primary" onclick="retryKbPractice()">↺ 再練一次</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal: Manage Texts ───────────────────────── -->
+  <div class="modal-overlay" id="manage-texts-modal">
+    <div class="modal" style="max-width:520px">
+      <h3>管理文章</h3>
+      <div id="texts-list"></div>
+      <hr class="texts-divider">
+      <div class="form-field">
+        <label class="form-label">文章名稱</label>
+        <input class="form-input" id="new-text-name" type="text" placeholder="例如：打招呼對話">
+      </div>
+      <div class="form-field">
+        <label class="form-label">韓文內容（貼入）</label>
+        <textarea class="batch-textarea" id="new-text-body"
+          placeholder="貼入韓文句子或段落…" style="min-height:100px"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeManageTexts()">關閉</button>
+        <button class="btn btn-primary" onclick="addNewText()">新增文章</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+  <script src="js/typing.js"></script>
+</body>
+</html>
